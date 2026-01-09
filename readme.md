@@ -109,8 +109,7 @@ The script should continue running and for this fake product, it should append a
     - Extracting all headphone product URLs (see `discover_products.py`)
     - Parsing product info and historical prices (see `scrape_price_history.py`)
     - Saving and appending to `data/price_history.csv`
-- Data for tens of headphones already collected over several runs.
-- Notebooks for EDA (exploratory data analysis) are being drafted.
+- Data for headphones collected in first run .
 
 ---
 
