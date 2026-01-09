@@ -114,7 +114,10 @@ The script should continue running and for this fake product, it should append a
 ---
 
 ## Next Steps / Roadmap
-
+- Add retry logic outside of run: what if certain product is not loaded correctly, try again in case of certain errors (http_error, parse_error(?))
+- Add retry logic within run
+- Alternatives for windows task scheduler
+- implement better logging for tasks
 - [ ] Improve robustness of scraper to handle captchas/blocks, edge cases (if needed)
 - [ ] Add retry logic and proxy support (if needed)
 - [ ] Expand data model with more product fields (e.g., ratings, reviews) (optional)

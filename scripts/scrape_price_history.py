@@ -16,6 +16,22 @@ import csv
 from pathlib import Path
 from datetime import datetime
 import requests
+from datetime import datetime
+
+# Create logs directory if it doesn't exist
+log_dir = Path(__file__).parent.parent / "logs"
+log_dir.mkdir(exist_ok=True)
+
+# Use current datetime in log file name
+log_time_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+log_file = log_dir / f"task_scheduler_{log_time_str}.log"
+
+# Add current datetime to the log itself as well
+with open(log_file, "a", encoding="utf-8") as lf:
+    lf.write(f"\n---\nScript started at {datetime.now().isoformat(sep=' ', timespec='seconds')}\n")
+
+sys.stdout = open(log_file, "a", encoding="utf-8")
+sys.stderr = sys.stdout
 
 # Add parent directory to path to import from src
 sys.path.insert(0, str(Path(__file__).parent.parent))
