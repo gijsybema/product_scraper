@@ -7,13 +7,10 @@ matplotlib
 seaborn
 plotly
 
-# Jupyter notebooks
-jupyter
-ipykernel
-
 # Optional: Add other dependencies as needed
 requests
 beautifulsoup4
 httpx
 # scikit-learn
 
+psycopg2-binary
