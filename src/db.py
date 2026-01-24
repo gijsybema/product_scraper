@@ -1,17 +1,16 @@
 import psycopg2
 from config import DB_CONFIG
 from datetime import date
+from psycopg2 import OperationalError
 
 def get_connection():
-    return psycopg2.connect(**DB_CONFIG)
-
-def insert_retailer(name, base_url):
-    conn = None
-    cur = None
     try:
-        conn = get_connection()
-        cur = conn.cursor()
+        return psycopg2.connect(**DB_CONFIG)
+    except OperationalError as e:
+        raise RuntimeError(f"Database connection failed: {e}")
 
+def insert_retailer(conn, name, base_url):
+    with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO retailers (name, base_url)
@@ -22,29 +21,19 @@ def insert_retailer(name, base_url):
             (name, base_url)
         )
 
-        result = cur.fetchone()
-        conn.commit()
-        return result[0] if result else None
+        row = cur.fetchone()
+        if row:
+            return row[0]
 
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        raise e
+        # already existed → fetch id (get or create principle)
+        cur.execute(
+            "SELECT id FROM retailers WHERE name = %s;",
+            (name,)
+        )
+        return cur.fetchone()[0]
 
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
-
-
-def insert_product(retailer_id, sku, brand, name, product_url):
-    conn = None
-    cur = None
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-
+def insert_product(conn, retailer_id, sku, brand, name, product_url):
+    with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO products (retailer_id, sku, brand, name, product_url)
@@ -54,31 +43,25 @@ def insert_product(retailer_id, sku, brand, name, product_url):
             """,
             (retailer_id, sku, brand, name, product_url)
         )
+        row = cur.fetchone()
 
-        result = cur.fetchone()
-        conn.commit()
-        return result[0] if result else None
+        if row:
+            return row[0]
 
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        raise e
+        # already existed → fetch id  (get or create principle)
+        cur.execute(
+            """
+            SELECT id FROM products
+            WHERE retailer_id = %s AND sku = %s;
+            """,
+            (retailer_id, sku)
+        )
+        return cur.fetchone()[0]
 
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+def insert_price(conn, product_id, price, availability, scraped_at=None):
+    scraped_at = scraped_at or date.today()
 
-def insert_price(product_id, price, availability, scraped_at=None):
-    if scraped_at is None:
-        scraped_at = date.today()
-
-    conn = None
-    cur = None
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
+    with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO price_history (product_id, price, availability, scraped_at)
@@ -87,14 +70,4 @@ def insert_price(product_id, price, availability, scraped_at=None):
             """,
             (product_id, price, availability, scraped_at)
         )
-        conn.commit()
 
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        raise e
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()

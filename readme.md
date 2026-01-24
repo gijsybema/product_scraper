@@ -103,6 +103,19 @@ The script should continue running and for this fake product, it should append a
 
 ---
 
+
+## Reset whole database
+To clear all tables in the database and reset indices the whole database, run the following SQL command (use with caution):
+
+```sql
+TRUNCATE TABLE
+    price_history,
+    products,
+    retailers
+RESTART IDENTITY
+CASCADE;
+```
+
 ## Current Status
 
 - Scraper functions are operational for:
