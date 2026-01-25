@@ -1,37 +1,48 @@
 """
-Weekly script to discover all unique Coolblue products, enrich them with product
-metadata from the product detail page and store them directly in PostgreSQL.
-
-Usage:
-    python scripts/discover_products.py [category_url]
+Test script: discover + enrich 5 known Coolblue products
 """
 
 import sys
-import time
 from pathlib import Path
+import time
 
-# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.coolblue_discovery import get_all_coolblue_products
-from src.coolblue_product_scraping import scrape_product_details
 from src.db import get_connection
+from src.coolblue_product_scraping import scrape_product_details
 
 
-COOLBLUE_RETAILER_ID = 1  # adjust if needed
+COOLBLUE_RETAILER_ID = 1
+
+TEST_PRODUCTS = [
+    {
+        "sku": "936045",
+        "product_url": "https://www.coolblue.nl/product/936045/bose-quietcomfort-ultra-headphones-zwart.html",
+    },
+    {
+        "sku": "962722",
+        "product_url": "https://www.coolblue.nl/product/962722/sony-wh-1000xm6-zwart.html",
+    },
+    {
+        "sku": "934400",
+        "product_url": "https://www.coolblue.nl/product/934400/jbl-live-770nc-zwart.html",
+    },
+    {
+        "sku": "936048",
+        "product_url": "https://www.coolblue.nl/product/936048/bose-quietcomfort-headphones-zwart.html",
+    },
+    {
+        "sku": "962724",
+        "product_url": "https://www.coolblue.nl/product/962724/sony-wh-1000xm6-blauw.html",
+    },
+    {
+        "sku": "123456",
+        "product_url": "https://www.coolblue.nl/product/123456/THIS-DOES-NOT-EXIST.html",
+    }
+]
 
 
-def upsert_product(conn, sku: str, product_url: str, details: dict):
-    """
-    Insert product if it does not exist yet.
-    Update name / url if it already exists.
-
-    ON CONFLICT DO UPDATE is used because product metadata (such as name or product URL) 
-    can change over time.
-    If a product already exists, its name, URL, and active status are
-    updated to reflect the latest scraped data, keeping the table idempotent
-    and up to date.
-    """
+def upsert_product(conn, sku, product_url, details):
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -60,7 +71,6 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
             ),
         )
 
-
 def print_progress(current, total, sku=None, elapsed=None, avg_time=None, est_time_left=None):
     percent = 100 * ((current + 1) / total)
     msg = f"[{current+1}/{total}] ({percent:.1f}%)"
@@ -73,44 +83,49 @@ def print_progress(current, total, sku=None, elapsed=None, avg_time=None, est_ti
         msg += f" | Avg: {avg_time:.2f}s/item, ETA: {est_time_left:.1f}s ({eta_minutes:.1f} min)"
     print(msg, flush=True)
 
+def main():
+    conn = get_connection()
+
+    try:
+        for p in TEST_PRODUCTS:
+            print(f"Scraping {p['sku']}")
+
+            details = scrape_product_details(p["product_url"])
+            print(" →", details)
+
+            upsert_product(
+                conn,
+                sku=p["sku"],
+                product_url=p["product_url"],
+                details=details,
+            )
+
+        conn.commit()
+        print("\n✅ Test run completed successfully")
+
+    except Exception as e:
+        conn.rollback()
+        print("❌ ERROR during test run:", e)
+        raise
+
+    finally:
+        conn.close()
+
+
 
 def main():
     overall_start_time = time.time()
-    if len(sys.argv) > 1:
-        category_url = sys.argv[1]
-    else:
-        category_url = "https://www.coolblue.nl/hoofdtelefoons/filter"
-        print(f"No category URL provided, using default: {category_url}")
-
-    print(f"Discovering products from: {category_url}")
-    print("This may take a while...")
-
-    # Time and print how long it takes to get all product URLs
-    get_products_start_time = time.time()
-    products = get_all_coolblue_products(category_url)
-    get_products_elapsed = time.time() - get_products_start_time
-    total = len(products)
-    print(f"Found {total} product URLs")
-    print(f"Product URL discovery took {get_products_elapsed:.1f} seconds")
 
     conn = get_connection()
     success = 0
     failed = 0
 
     try:
-        iter_times = []
-        for idx, product in enumerate(products):
-            iter_start_time = time.time()
+        for product in TEST_PRODUCTS:
             sku = product["sku"]
             product_url = product["product_url"]
 
             try:
-                # Time and ETA calculation (using the sum of iter_times so far)
-                elapsed = sum(iter_times) if iter_times else 0
-                avg_time = (elapsed / idx) if idx > 0 else None
-                est_time_left = (total - (idx + 1)) * avg_time if avg_time is not None else None
-                print_progress(idx, total, sku=sku, elapsed=elapsed, avg_time=avg_time, est_time_left=est_time_left)
-
                 details = scrape_product_details(product_url)
 
                 upsert_product(
@@ -120,9 +135,6 @@ def main():
                     details=details,
                 )
 
-                iter_end_time = time.time()
-                iter_times.append(iter_end_time - iter_start_time)
-
                 success +=1
 
             except Exception as e:
@@ -131,7 +143,6 @@ def main():
                 continue
 
         conn.commit()
-        print("COMMITTING TRANSACTION")
         total_elapsed = time.time() - overall_start_time
         print(f"Product discovery + enrichment completed successfully in {total_elapsed:.1f} seconds")
 
@@ -144,6 +155,7 @@ def main():
         conn.close()
 
     print(f"Discovery finished: {success} succeeded, {failed} failed")
+
 
 if __name__ == "__main__":
     main()

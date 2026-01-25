@@ -1,7 +1,8 @@
 import psycopg2
-from config import DB_CONFIG
 from datetime import date
 from psycopg2 import OperationalError
+
+from src.config import DB_CONFIG
 
 def get_connection():
     try:

@@ -43,7 +43,7 @@ def extract_name_from_url(url):
 def get_coolblue_products_from_category(url, timeout=10):
     """
     Given a category page URL from Coolblue, scrape the products from that page.
-    Returns a list of product dictionaries with product_id, name, url, and active.
+    Returns a list of product dicts with only 'sku' and 'product_url'.
     """
     response = requests.get(url, headers=HEADERS, timeout=timeout)
     response.raise_for_status()
@@ -71,16 +71,13 @@ def get_coolblue_products_from_category(url, timeout=10):
         href = a.get("href", "")
         if PRODUCT_HREF_RE.match(href):
             full_url = urljoin("https://www.coolblue.nl", href)
-            
             # Dedupe by URL
             if full_url not in seen_urls:
                 seen_urls.add(full_url)
                 try:
                     product = {
-                        "product_id": extract_product_id_from_url(full_url),
-                        "name": extract_name_from_url(full_url),
-                        "url": full_url,
-                        "active": True
+                        "sku": str(extract_product_id_from_url(full_url)),
+                        "product_url": full_url
                     }
                     products.append(product)
                 except ValueError as e:
@@ -100,8 +97,8 @@ def get_all_coolblue_products(base_category_url, max_pages=20, timeout=10):
         timeout (int): requests timeout in seconds
 
     Returns:
-        list: All found products across all paginated pages (deduplicated by URL, in order).
-              Each product is a dict with product_id, name, url, and active.
+        list: All found products across all paginated pages (deduplicated by product_url, in order).
+              Each product is a dict with keys 'sku' and 'product_url'.
     """
     all_products = []
     seen_urls = set()
@@ -113,13 +110,13 @@ def get_all_coolblue_products(base_category_url, max_pages=20, timeout=10):
             if not page_products:
                 # No products found on this page, likely end of pagination
                 break
-            
-            # Dedupe by URL while preserving order
+
+            # Dedupe by product_url while preserving order
             for product in page_products:
-                if product["url"] not in seen_urls:
-                    seen_urls.add(product["url"])
+                if product["product_url"] not in seen_urls:
+                    seen_urls.add(product["product_url"])
                     all_products.append(product)
-                    
+
         except (requests.exceptions.HTTPError, ValueError) as e:
             # Page doesn't exist or scraping failed - reached end of pagination
             print(f"Stopped at page {page}: {e}")

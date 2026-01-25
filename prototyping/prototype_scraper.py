@@ -69,6 +69,11 @@ for script in scripts:
     price = offers.get("price")
     availability = offers.get("availability")
 
+    # Extract average rating and review count
+    ratings = data.get("aggregateRating", {})
+    average_rating = ratings.get("ratingValue")
+    review_count = ratings.get("reviewCount")
+
     # Convert price to cents (if price is present)
     price_cents = int(float(price) * 100) if price is not None else None
 
@@ -84,6 +89,8 @@ for script in scripts:
         "brand": data.get("brand", {}).get("name") if isinstance(data.get("brand"), dict) else data.get("brand"),
         "price_cents": price_cents,
         "in_stock": bool(in_stock),
+        "average_rating": average_rating,
+        "review_count": review_count,
         "url": data.get("url"),
         "sku": sku
     }

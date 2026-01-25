@@ -2,8 +2,6 @@
 from db import get_connection, insert_retailer, insert_product, insert_price
 from scraper import scrape_products
 
-# later, add loop for scrape products
-
 def run_scrape():
     conn = get_connection()
     try:
