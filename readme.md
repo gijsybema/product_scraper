@@ -48,61 +48,22 @@ This project is a data collection and analysis tool for tracking price and avail
 
 ## Quickstart
 
-1. **Find all headphones** (populate products.json):
+1. **Discover all headphones and populate the database:**
 
     ```bash
     python scripts/discover_products.py
-    # Output: data/products.json with URLs of all headphones
+    # Output: Product metadata is discovered and stored directly in the database.
     ```
 
-2. **Scrape current prices and build price history:**
+2. **Scrape current prices and update price history in the database:**
 
     ```bash
     python scripts/scrape_price_history.py
-    # Output: data/price_history.csv (appends today's prices for all discovered products)
+    # Output: Today's prices and facts for all products are stored in the database price_history table.
     ```
 
 
 ---
-
-## Data Formats
-
-- **`data/products.json`**: List of Coolblue product URLs (headphones only)
-- **`data/price_history.csv`**: Table with columns:
-    - `timestamp`, `sku`, `name`, `brand`, `price_cents`, `in_stock`, `url`
-
-Example row:
-```
-2026-01-09,954349,Apple AirPods Max Goud,Apple,56100,True,https://www.coolblue.nl/product/954349/apple-airpods-max-goud.html
-```
-
----
-
-## Test: Handling Nonexistent Product
-
-To test robustness to missing or non-existent product URLs, manually add the following fake product object to the start of your `data/products.json`, immediately after the opening `[`:
-
-```json
-{
-  "product_id": 999999999,
-  "name": "Does Not Exist",
-  "url": "https://www.coolblue.nl/product/999999999/does-not-exist.html",
-  "active": true
-},
-```
-
-Now run:
-
-```bash
-python scripts/scrape_price_history.py
-```
-
-Expected outcome:  
-The script should continue running and for this fake product, it should append a row to `data/price_history.csv` with `status` set to `not_found` (see the top of `price_history.csv` for a row like this:  
-`...,999999999,Does Not Exist,,,,https://www.coolblue.nl/product/999999999/does-not-exist.html,not_found`)
-
----
-
 
 ## Reset whole database
 To clear all tables in the database and reset indices the whole database, run the following SQL command (use with caution):
@@ -118,16 +79,24 @@ CASCADE;
 ## Current Status
 
 - Scraper functions are operational for:
-    - Extracting all headphone product URLs (see `discover_products.py`)
-    - Parsing product info and historical prices (see `scrape_price_history.py`)
-    - Saving and appending to `data/price_history.csv`
-- Data for headphones collected in first run .
+    - Collecting brand, product name, URL, ratings, review counts, price, and availability from Coolblue product pages
+    - Upserting product name, brand, URL into the PostgreSQL `products` table per weekly run (see `discover_products.py`)
+    - Upserting price and availability data into the PostgreSQL `price_history` table for each daily run (see `scrape_price_history.py`)
+    - Uses modular code structure: database, scraping, and utility functions split out in `src/`
+    - Designed to run as a scheduled task (e.g. via cron or Task Scheduler)
+
+- Data for headphones collected in first run and stored in both the database and local CSV
+- Scripts validated on multiple products (>10 SKUs), with stable operation
+- Easy extension to other product categories possible by modifying `discover_products.py`
+- Installation and quickstart instructions included for reproducibility
+
 
 ---
 
 ## Next Steps / Roadmap
 - Add retry logic outside of run: what if certain product is not loaded correctly, try again in case of certain errors (http_error, parse_error(?))
 - Add retry logic within run
+- Progress reporting and error capture for each product scrape in both scripts
 - Alternatives for windows task scheduler
 - implement better logging for tasks
 - [ ] Improve robustness of scraper to handle captchas/blocks, edge cases (if needed)

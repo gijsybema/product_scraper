@@ -1,5 +1,4 @@
 
-from multiprocessing.sharedctypes import Value
 import requests
 import time
 import random
@@ -84,14 +83,11 @@ if __name__ == "__main__":
     # Example usage for test/debug:
     example_url = "https://www.coolblue.nl/product/959897/jbl-tour-one-m3-goud.html"
 
-    product_dimensions = scrape_product_details(example_url)
-    print(product_dimensions)
+    product_details = scrape_product_details(example_url)
+    print("Product details:", product_details)
 
     product_facts = scrape_product_facts(example_url)
-    print(product_facts)
-
-    product_data = scrape_coolblue_product_info(example_url)
-    print(product_data)
+    print("Product facts:", product_facts)
 
 
 
