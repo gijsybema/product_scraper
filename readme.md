@@ -110,8 +110,7 @@ To clear all tables in the database and reset indices the whole database, run th
 ```sql
 TRUNCATE TABLE
     price_history,
-    products,
-    retailers
+    products
 RESTART IDENTITY
 CASCADE;
 ```
