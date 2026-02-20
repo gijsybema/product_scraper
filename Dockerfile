@@ -25,4 +25,4 @@ COPY src /app/src
 COPY scripts /app/scripts
 
 # Default command (daily). In ECS you can override this per schedule.
-CMD ["python", "scripts/scrape_price_history.py"]
+CMD ["python", "scripts/test_db_connection.py"]
