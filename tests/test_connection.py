@@ -1,4 +1,10 @@
-from db import get_connection
+from pathlib import Path
+import sys
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.db import get_connection
 
 def test_connection():
     """
@@ -10,12 +16,15 @@ def test_connection():
         cur = conn.cursor()
 
         # Execute a simple SQL query to check the connection
-        cur.execute("SELECT version();")
+        cur.execute("SELECT current_database(), current_user, inet_server_addr(), inet_server_port();")
         print("Connected to:", cur.fetchone())
+
+        cur.execute("SELECT * FROM retailers LIMIT 1")
+        print("Results:", cur.fetchall())
 
     except Exception as e:
         # Print an error message if something goes wrong
-        print("Connection failed:", e)
+            print("Connection failed:", e)
 
     finally:
         # Clean up: close the cursor and connection if they were opened

@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 from src.db import get_connection, insert_retailer, insert_product, insert_price
-from src.scraper import scrape_products
+#from src.scraper import scrape_products
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))

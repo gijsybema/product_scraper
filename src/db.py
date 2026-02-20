@@ -1,4 +1,5 @@
 import psycopg2
+import os
 from datetime import date, datetime
 from psycopg2 import OperationalError
 
@@ -7,8 +8,23 @@ from src.config import DB_CONFIG
 COOLBLUE_RETAILER_ID = 1  # adjust if needed
 
 def get_connection():
+    """
+    Connect to Postgres.
+
+    - On Railway: uses DATABASE_URL provided by the platform
+    - Locally: falls back to DB_CONFIG (existing config dict)
+    """
+    database_url = os.getenv("DATABASE_URL")
+
     try:
+        if database_url:
+            # 'require' is a safe default for managed Postgres providers
+            sslmode = os.getenv("PGSSLMODE", "require")
+            return psycopg2.connect(database_url, sslmode=sslmode)
+
+        # Local/dev fallback (your current approach)
         return psycopg2.connect(**DB_CONFIG)
+
     except OperationalError as e:
         raise RuntimeError(f"Database connection failed: {e}")
 

@@ -11,7 +11,5 @@ plotly
 requests
 beautifulsoup4
 httpx
-# scikit-learn
-
 psycopg2-binary
 dotenv
