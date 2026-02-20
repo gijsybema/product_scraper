@@ -3,8 +3,6 @@ import os
 from datetime import date, datetime
 from psycopg2 import OperationalError
 
-from src.config import DB_CONFIG
-
 COOLBLUE_RETAILER_ID = 1  # adjust if needed
 
 def get_connection():
@@ -22,7 +20,10 @@ def get_connection():
             sslmode = os.getenv("PGSSLMODE", "require")
             return psycopg2.connect(database_url, sslmode=sslmode)
 
-        # Local/dev fallback (your current approach)
+        # Only import DB_CONFIG if we actually need it
+        from src.config import DB_CONFIG
+        if not DB_CONFIG:
+            raise RuntimeError("Local DB_CONFIG is not set. Set DB_* env vars for local dev.")
         return psycopg2.connect(**DB_CONFIG)
 
     except OperationalError as e:

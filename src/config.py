@@ -9,13 +9,18 @@ def _env(name: str, default: str | None = None, required: bool = False) -> str:
         raise RuntimeError(f"Missing required environment variable: {name}")
     return val
 
-DB_CONFIG = {
-    # psycopg2 accepts dbname or database; "dbname" is the canonical keyword
-    "host": _env("DB_HOST", "localhost"),
-    "port": int(_env("DB_PORT", "5432")),
-    "dbname": _env("DB_NAME", "pricetracker"),
-    "user": _env("DB_USER", "postgres"),
-    "password": _env("DB_PASSWORD", "", required=True),  # require for safety
-    # Optional SSL: in AWS you usually want "require"
-    "sslmode": _env("DB_SSLMODE", "disable"),  # local default
-}
+# If Railway provides DATABASE_URL, we don't need individual DB_* vars
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+DB_CONFIG = None
+if not DATABASE_URL:
+    DB_CONFIG = {
+        # psycopg2 accepts dbname or database; "dbname" is the canonical keyword
+        "host": _env("DB_HOST", "localhost"),
+        "port": int(_env("DB_PORT", "5432")),
+        "dbname": _env("DB_NAME", "pricetracker"),
+        "user": _env("DB_USER", "postgres"),
+        "password": _env("DB_PASSWORD", "", required=True),  # require for safety
+        # Optional SSL: in AWS you usually want "require"
+        "sslmode": _env("DB_SSLMODE", "disable"),  # local default
+    }
