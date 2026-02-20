@@ -1,7 +1,21 @@
+# src/config.py
+import os
+from dotenv import load_dotenv
+load_dotenv(".env.local")
+
+def _env(name: str, default: str | None = None, required: bool = False) -> str:
+    val = os.getenv(name, default)
+    if required and (val is None or val == ""):
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return val
+
 DB_CONFIG = {
-        "host":"localhost",
-        "database":"price_tracker",
-        "user":"postgres",
-        "password":"6zixwYwh%C$!MrhY",
-        "port":5432
+    # psycopg2 accepts dbname or database; "dbname" is the canonical keyword
+    "host": _env("DB_HOST", "localhost"),
+    "port": int(_env("DB_PORT", "5432")),
+    "dbname": _env("DB_NAME", "pricetracker"),
+    "user": _env("DB_USER", "postgres"),
+    "password": _env("DB_PASSWORD", "", required=True),  # require for safety
+    # Optional SSL: in AWS you usually want "require"
+    "sslmode": _env("DB_SSLMODE", "disable"),  # local default
 }

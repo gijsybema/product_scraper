@@ -68,12 +68,21 @@ This project is a data collection and analysis tool for tracking price and avail
 ## Reset whole database
 To clear all tables in the database and reset indices the whole database, run the following SQL command (use with caution):
 
+
 ```sql
 TRUNCATE TABLE
     price_history,
-    products
+    products,
+    retailers
 RESTART IDENTITY
 CASCADE;
+```
+
+## Add Coolblue to retailers
+
+```sql
+INSERT INTO retailers (name, base_url)
+VALUES ('Coolblue', 'https://coolblue.nl');
 ```
 
 ## Current Status

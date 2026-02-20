@@ -14,3 +14,4 @@ httpx
 # scikit-learn
 
 psycopg2-binary
+dotenv
