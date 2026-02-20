@@ -17,13 +17,14 @@ def get_connection():
     try:
         if database_url:
             # 'require' is a safe default for managed Postgres providers
-            sslmode = os.getenv("PGSSLMODE", "require")
-            return psycopg2.connect(database_url, sslmode=sslmode)
+            return psycopg2.connect(database_url, sslmode="require")
 
         # Only import DB_CONFIG if we actually need it
         from src.config import DB_CONFIG
+        
         if not DB_CONFIG:
             raise RuntimeError("Local DB_CONFIG is not set. Set DB_* env vars for local dev.")
+        
         return psycopg2.connect(**DB_CONFIG)
 
     except OperationalError as e:
