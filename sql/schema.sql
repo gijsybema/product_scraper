@@ -30,14 +30,32 @@ CREATE TABLE IF NOT EXISTS price_history (
   UNIQUE (product_id, scraped_at)
 );
 
--- price_alerts
-CREATE TABLE IF NOT EXISTS price_alerts (
+-- price_drops
+CREATE TABLE IF NOT EXISTS price_drops (
   id SERIAL PRIMARY KEY,
+
   product_id INTEGER NOT NULL REFERENCES products(id),
+
+  -- welke metingen vergeleken zijn
+  new_scraped_at DATE NOT NULL,
+  old_scraped_at DATE,
+
+  -- waarden
   old_price NUMERIC(10,2) NOT NULL,
   new_price NUMERIC(10,2) NOT NULL,
-  drop_percentage NUMERIC(6,2) NOT NULL,
-  rule TEXT NOT NULL, -- e.g. '10_percent_drop'
+  price_diff NUMERIC(10,2) NOT NULL,         -- old_price - new_price (positief bij drop)
+  drop_percentage NUMERIC(6,2) NOT NULL,     -- positief bij drop
+
+  -- type event (handig als je later meerdere drop-types toevoegt)
+  rule TEXT NOT NULL DEFAULT 'daily_drop',
+
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  sent_at TIMESTAMP
+  sent_at TIMESTAMP,
+
+  -- sanity checks (optioneel maar nuttig)
+  CONSTRAINT chk_price_drops_prices_positive CHECK (old_price > 0 AND new_price > 0),
+  CONSTRAINT chk_price_drops_drop_positive CHECK (price_diff >= 0 AND drop_percentage >= 0),
+
+  -- voorkom dubbele rows als je detect script nog een keer draait
+  CONSTRAINT uniq_price_drops_day UNIQUE (product_id, new_scraped_at, rule)
 );

@@ -119,3 +119,58 @@ def get_products_to_scrape():
         return [{"product_id": product[0], "product_url": product[1]} for product in products]
     finally:
         conn.close()
+
+
+def insert_daily_price_drops(conn) -> int:
+    """
+    Insert all daily price drops (today vs previous measurement)
+    into price_drops table.
+    Returns number of inserted rows.
+    """
+
+    sql = """
+    WITH ranked AS (
+      SELECT
+        ph.product_id,
+        ph.scraped_at,
+        ph.price,
+        LAG(ph.price) OVER (PARTITION BY ph.product_id ORDER BY ph.scraped_at) AS prev_price,
+        LAG(ph.scraped_at) OVER (PARTITION BY ph.product_id ORDER BY ph.scraped_at) AS prev_date
+      FROM price_history ph
+    ),
+    latest AS (
+      SELECT *
+      FROM ranked
+      WHERE scraped_at = CURRENT_DATE
+    )
+    INSERT INTO price_drops (
+      product_id,
+      new_scraped_at,
+      old_scraped_at,
+      old_price,
+      new_price,
+      price_diff,
+      drop_percentage,
+      rule
+    )
+    SELECT
+      l.product_id,
+      l.scraped_at AS new_scraped_at,
+      l.prev_date AS old_scraped_at,
+      l.prev_price AS old_price,
+      l.price AS new_price,
+      (l.prev_price - l.price) AS price_diff,
+      ROUND(((l.prev_price - l.price) / l.prev_price) * 100, 2) AS drop_percentage,
+      'daily_drop'
+    FROM latest l
+    JOIN products p ON p.id = l.product_id
+    WHERE p.active = TRUE
+      AND l.prev_price IS NOT NULL
+      AND l.prev_price > 0 AND l.price > 0
+      AND l.price < l.prev_price
+    ON CONFLICT (product_id, new_scraped_at, rule) DO NOTHING;
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        return cur.rowcount
