@@ -220,7 +220,7 @@ def get_all_coolblue_products(base_category_url: str, max_pages=50, timeout=20):
             page_products = get_products_from_category_page(session, url, timeout=timeout, retries=2)
 
             if page_products is None:
-                print(f"Page {page} not found (404): {url}. Stopping.")
+                print(f"Page {page}, url {url} not found (404): {url}. Stopping.")
                 break
 
             new_count = 0
@@ -230,7 +230,7 @@ def get_all_coolblue_products(base_category_url: str, max_pages=50, timeout=20):
                     all_products.append(p)
                     new_count += 1
 
-            print(f"Page {page}: found {len(page_products)} products, new {new_count}")
+            print(f"Page {page}, url {url}: found {len(page_products)} products, new {new_count}")
 
             # Stop when this page contributes no NEW products
             # (prevents infinite loops + handles glitches better than 'if not page_products')

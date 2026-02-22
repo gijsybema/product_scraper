@@ -88,7 +88,12 @@ def upsert_price_history(conn, product_id: int, scraped_at: datetime, price: flo
                 review_count
             )
             VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (product_id, scraped_at) DO NOTHING;
+            ON CONFLICT (product_id, scraped_at) 
+            DO UPDATE SET
+                price = EXCLUDED.price,
+                availability = EXCLUDED.availability,
+                rating = EXCLUDED.rating,
+                review_count = EXCLUDED.review_count;
             """,
             (
                 product_id,
