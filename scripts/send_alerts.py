@@ -115,7 +115,7 @@ def send_telegram_message(token: str, chat_id: str, text: str):
         "chat_id": chat_id,
         "text": text,
         #"parse_mode": "Markdown", #Tijdelijk uitgeschakeld om ongeldige markdown te voorkomen
-        "disable_web_page_preview": False,
+        "disable_web_page_preview": True,
     }
     resp = requests.post(url, json=payload, timeout=20)
     resp.raise_for_status()
@@ -128,12 +128,6 @@ def send_telegram_message(token: str, chat_id: str, text: str):
 def main():
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
-
-    def mask(s):
-        return "MISSING" if not s else s[:6] + "..." + s[-4:]
-
-    print("[ENV] token =", mask(token))
-    print("[ENV] chat_id =", chat_id or "MISSING")
 
     if not token or not chat_id:
         raise SystemExit("Missing env vars: TELEGRAM_BOT_TOKEN and/or TELEGRAM_CHAT_ID")
