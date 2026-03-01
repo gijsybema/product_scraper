@@ -97,7 +97,7 @@ def format_message(d):
     # Make it readable + clickable. Telegram auto-links URLs.
     old_price = f"€{d['old_price']:.0f}" if d["old_price"] is not None else "—"
     new_price = f"€{d['new_price']:.0f}" if d["new_price"] is not None else "—"
-    drop_pct = f"{Decimal(d['drop_pct']):.0f}%"
+    drop_pct = f"{Decimal(d['drop_pct']):.1f}%"
     price_diff = f"€{d['price_diff']:.0f}" if d["price_diff"] is not None else "—"
 
     return (

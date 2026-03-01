@@ -106,6 +106,15 @@ WHERE new_scraped_at = CURRENT_DATE
     OR drop_percentage <> ROUND(((old_price - new_price) / NULLIF(old_price, 0)) * 100, 2)
   );
 
+-- Check was was marked sent
+SELECT
+  id,
+  product_id,
+  drop_percentage,
+  sent_at
+FROM price_drops
+WHERE new_scraped_at = CURRENT_DATE
+ORDER BY drop_percentage DESC;
 
 -- ------------------------------------------
 -- SCRAPE_RUNS (health)
