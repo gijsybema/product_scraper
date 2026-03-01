@@ -145,7 +145,7 @@ def main():
             msg = format_message(d)
             try:
                 send_telegram_message(token, chat_id, msg)
-                #mark_sent(conn, d["drop_id"]) -- Tijdelijk uitgeschakeld voor testen
+                mark_sent(conn, d["drop_id"]) 
                 print(f"[ALERTS] sent drop_id={d['drop_id']} product_id={d['product_id']}")
             except Exception as e:
                 # IMPORTANT: do NOT mark as sent on failure
