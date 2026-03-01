@@ -25,7 +25,7 @@ time.sleep(random.uniform(2, 4))
 
 # Get HTML and check if scraping worked
 html = response.text
-print(html[:10])
+print(html[:1000])
 soup = BeautifulSoup(html, "html.parser")
 
 # Check for common error indicators

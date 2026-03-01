@@ -59,3 +59,27 @@ CREATE TABLE IF NOT EXISTS price_drops (
   -- voorkom dubbele rows als je detect script nog een keer draait
   CONSTRAINT uniq_price_drops_day UNIQUE (product_id, new_scraped_at, rule)
 );
+
+--scrape runs
+CREATE TABLE IF NOT EXISTS scrape_runs (
+  id BIGSERIAL PRIMARY KEY,
+  job_name TEXT NOT NULL,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'running', -- running|success|failed|blocked|partial
+  total_products INT,
+  success_count INT DEFAULT 0,
+  failed_count INT DEFAULT 0,
+  blocked_count INT DEFAULT 0,
+  next_retry_at TIMESTAMPTZ,
+  retry_attempt INT NOT NULL DEFAULT 0,
+  last_error TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_scrape_runs_job_started
+  ON scrape_runs(job_name, started_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_scrape_runs_next_retry
+  ON scrape_runs(job_name, next_retry_at)
+  WHERE next_retry_at IS NOT NULL;
+

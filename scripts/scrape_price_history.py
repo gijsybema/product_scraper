@@ -9,17 +9,20 @@ Usage:
 import sys
 import time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import traceback
 from typing import Optional, Tuple
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.db import get_connection, upsert_price_history, get_products_to_scrape
+from src.db import create_scrape_run, finish_scrape_run
 from src.coolblue_product_scraping import scrape_product_facts
 from src.utils import print_progress
+
 
 def process_single_product(conn, product_id: int, product_url: str, scraped_at) -> Tuple[bool, Optional[Exception]]:
     """
@@ -72,6 +75,11 @@ def process_products(conn, products):
 
     total_iter_time = 0.0
     scraped_at = datetime.now().date()
+
+    # pacing knobs (tune later)
+    PER_PRODUCT_SLEEP_RANGE = (2.0, 4.0)   # seconds
+    BATCH_EVERY = 25
+    BATCH_SLEEP_RANGE = (5.0, 15.0)       # seconds
 
     for idx, product in enumerate(products):
         iter_start = time.time()
@@ -129,10 +137,42 @@ def process_products(conn, products):
             print(traceback.format_exc())
             print("--------------------------------------------------")
 
+        # Add sleep (runs after every product, success or fail)
+        sleep_s = random.uniform(*PER_PRODUCT_SLEEP_RANGE)
+        print(f"[PACE] Sleeping {sleep_s:.2f}s")
+        time.sleep(sleep_s)
+
+        # Longer pause every N products
+        if (idx + 1) % BATCH_EVERY == 0:
+            batch_sleep_s = random.uniform(*BATCH_SLEEP_RANGE)
+            print(f"[PACE] Batch pause after {idx+1} products: sleeping {batch_sleep_s:.2f}s")
+            time.sleep(batch_sleep_s)
+
     return success, failed
 
+# ----------------------------
+# retry logic
+# ----------------------------
+RETRY_DELAYS_HOURS = [1, 2, 4, 4]  # attempt 1..4
 
+def next_retry_time(now, next_attempt: int):
+    """
+    next_attempt: 1..4 -> schedule based on RETRY_DELAYS_HOURS
+    returns datetime or None if no more retries
+    """
+    if 1 <= next_attempt <= len(RETRY_DELAYS_HOURS):
+        return now + timedelta(hours=RETRY_DELAYS_HOURS[next_attempt - 1])
+    return None
+
+# ----------------------------
+# main
+# ----------------------------
 def main():
+    # Add jitter to avoid the 09:00 “spike”
+    jitter_seconds = random.uniform(0, 10 * 60)  # 0-10 minutes
+    print(f"[RUN] Start jitter sleeping {jitter_seconds:.0f}s")
+    time.sleep(jitter_seconds)
+
     overall_start = time.time()
 
     start = time.time()
@@ -141,24 +181,77 @@ def main():
     print(f"Product lookup took {time.time() - start:.1f} seconds")
 
     conn = get_connection()
+    run_id = create_scrape_run(
+        conn,
+        job_name="price_history_daily",
+        total_products=len(products),
+        retry_attempt=0,
+    )
+    print(f"[RUN] run_id={run_id}")
+
+    success = 0
+    failed = 0
+    status = "success"
+    next_retry_at = None
+    last_error = None
+
     try:
         success, failed = process_products(conn, products)
 
+        total_elapsed = time.time() - overall_start
+        print(f"Price history scraping completed in {total_elapsed:.1f} seconds")
+        print(f"Finished: {success} succeeded, {failed} failed")
+
+        total = success + failed
+        fail_ratio = (failed / total) if total > 0 else 0.0
+
+        if failed > 0:
+            if total > 0 and fail_ratio > 0.2:
+                print("⚠️  High failure ratio — possible temporary block")
+                status = "failed"
+                next_retry_at = next_retry_time(datetime.now(), next_attempt=1)
+            else:
+                status = "partial"
+
     except Exception as e:
+        # If the whole run crashes, mark as failed and schedule retry
         try:
             conn.rollback()
-        except Exception as ex:
-            print("ERROR rolling back connection:", ex)
-        print("ERROR during price history scraping:", e)
+        except Exception:
+            pass
+        last_error = f"{type(e).__name__}: {e}"
+        print("ERROR during price history scraping:", last_error)
         print(traceback.format_exc())
-        raise
+
+        status = "failed"
+        next_retry_at = next_retry_time(datetime.now(), next_attempt=1)
+
+        # Optional: re-raise if you want Railway to show it as failed
+        # raise
 
     finally:
-        conn.close()
+        try:
+            finish_scrape_run(
+                conn,
+                run_id=run_id,
+                status=status,
+                success_count=success,
+                failed_count=failed,
+                blocked_count=0,
+                next_retry_at=next_retry_at,
+                last_error=last_error,
+            )
+        except Exception as e:
+            print("ERROR finishing scrape run:", e)
+            print(traceback.format_exc())
 
-    total_elapsed = time.time() - overall_start
-    print(f"Price history scraping completed in {total_elapsed:.1f} seconds")
-    print(f"Finished: {success} succeeded, {failed} failed")
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    if next_retry_at:
+        print(f"[RUN] Scheduled retry at {next_retry_at}")
 
 if __name__ == "__main__":
     main()
