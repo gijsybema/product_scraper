@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.db import get_connection, get_products_to_scrape, get_due_retry_run, clear_next_retry, create_scrape_run, finish_scrape_run
 from scripts.scrape_price_history import process_products  # reuse your function
+from scripts.detect_drops import run_detect_drops
+from scripts.scrape_price_history import FAIL_RATIO_THRESHOLD
 
 RETRY_DELAYS_HOURS = [1, 2, 4, 4]  # attempt 1..4
 
@@ -68,12 +70,26 @@ def main():
         next_retry_at = None
         status = "success"
         if failed > 0:
-            if fail_ratio >= 0.20:
+            if fail_ratio >= FAIL_RATIO_THRESHOLD:
                 status = "failed"
                 # backoff more on repeated failure
                 next_retry_at = next_retry_time(datetime.now(), next_attempt=this_attempt + 1)
             else:
                 status = "partial"
+
+        print(f"[RETRY] attempt={this_attempt} fail_ratio={fail_ratio:.1%} threshold={FAIL_RATIO_THRESHOLD:.0%} total={total} success={success} failed={failed} status={status}")
+
+        # ✅ Run drop detection if fail ratio is below threshold
+        if total > 0 and fail_ratio <= FAIL_RATIO_THRESHOLD:
+            print(f"[DROPS] Running detect_drops (fail_ratio={fail_ratio:.1%})")
+            try:
+                inserted = run_detect_drops(conn)
+                print(f"[DROPS] inserted {inserted} rows into price_drops")
+            except Exception as e:
+                print("[DROPS] ERROR:", e)
+                print(traceback.format_exc())
+        else:
+            print(f"[DROPS] Skip detect_drops (fail_ratio={fail_ratio:.1%} > {FAIL_RATIO_THRESHOLD:.0%})")
 
         finish_scrape_run(
             conn,

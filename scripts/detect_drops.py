@@ -14,11 +14,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.db import get_connection, insert_daily_price_drops
 
+def run_detect_drops(conn) -> int:
+    """
+    Run drop detection using an existing DB connection.
+    Returns number of inserted rows.
+    """
+    inserted = insert_daily_price_drops(conn)
+    conn.commit()
+    return inserted
+
 def main():
     conn = get_connection()
     try:
-        inserted = insert_daily_price_drops(conn)
-        conn.commit()
+        inserted = run_detect_drops(conn)
         print(f"✅ detect_drops: inserted {inserted} rows into price_drops")
     finally:
         conn.close()

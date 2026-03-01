@@ -14,6 +14,7 @@ import random
 import traceback
 from typing import Optional, Tuple
 
+FAIL_RATIO_THRESHOLD = 0.20
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -22,7 +23,7 @@ from src.db import get_connection, upsert_price_history, get_products_to_scrape
 from src.db import create_scrape_run, finish_scrape_run
 from src.coolblue_product_scraping import scrape_product_facts
 from src.utils import print_progress
-
+from scripts.detect_drops import run_detect_drops
 
 def process_single_product(conn, product_id: int, product_url: str, scraped_at) -> Tuple[bool, Optional[Exception]]:
     """
@@ -203,15 +204,31 @@ def main():
         print(f"Finished: {success} succeeded, {failed} failed")
 
         total = success + failed
-        fail_ratio = (failed / total) if total > 0 else 0.0
+        fail_ratio = (failed / total) if total > 0 else 1.0
 
         if failed > 0:
-            if total > 0 and fail_ratio > 0.2:
+            if total > 0 and fail_ratio > FAIL_RATIO_THRESHOLD:
                 print("⚠️  High failure ratio — possible temporary block")
                 status = "failed"
                 next_retry_at = next_retry_time(datetime.now(), next_attempt=1)
             else:
                 status = "partial"
+
+        print(f"[RUN] success={success} failed={failed} fail_ratio={fail_ratio:.1%} status={status}")
+        if next_retry_at:
+            print(f"[RUN] next_retry_at={next_retry_at}")
+
+        # Run drop detection if fail ratio is below threshold
+        if total > 0 and fail_ratio <= FAIL_RATIO_THRESHOLD:
+            print(f"[DROPS] Running detect_drops (fail_ratio={fail_ratio:.1%})")
+            try:
+                inserted = run_detect_drops(conn)
+                print(f"[DROPS] inserted {inserted} rows into price_drops")
+            except Exception as e:
+                print("[DROPS] ERROR:", e)
+                print(traceback.format_exc())
+        else:
+            print(f"[DROPS] Skip detect_drops (fail_ratio={fail_ratio:.1%} > {FAIL_RATIO_THRESHOLD:.0%})")
 
     except Exception as e:
         # If the whole run crashes, mark as failed and schedule retry
