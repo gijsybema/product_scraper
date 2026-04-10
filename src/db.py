@@ -3,6 +3,7 @@ import os
 from datetime import date, datetime
 from psycopg2 import OperationalError
 from typing import Optional, Dict, Any
+import json
 
 COOLBLUE_RETAILER_ID = 1  # adjust if needed
 
@@ -52,13 +53,22 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 name,
                 brand,
                 product_url,
+                image_url,
+                all_image_urls,
                 active
             )
-            VALUES (%s, %s, %s, %s, %s, true)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, true)
             ON CONFLICT (retailer_id, sku)
             DO UPDATE SET
                 name = EXCLUDED.name,
                 product_url = EXCLUDED.product_url,
+                image_url = COALESCE(EXCLUDED.image_url, products.image_url),
+                all_image_urls = CASE
+                    WHEN EXCLUDED.all_image_urls IS NOT NULL
+                        AND EXCLUDED.all_image_urls <> '[]'::jsonb
+                    THEN EXCLUDED.all_image_urls
+                    ELSE products.all_image_urls
+                END,
                 active = true,
                 brand = COALESCE(products.brand, EXCLUDED.brand);
             """,
@@ -68,6 +78,8 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 details["name"],
                 details.get("brand"),
                 product_url,
+                details.get("image_url"),
+                json.dumps(details.get("all_image_urls", [])),
             ),
         )
 

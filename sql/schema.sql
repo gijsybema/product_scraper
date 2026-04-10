@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS products (
   name TEXT NOT NULL,
   brand TEXT NOT NULL,
   product_url TEXT NOT NULL UNIQUE,
+    image_url TEXT,
+  all_image_urls JSONB,
   created_at TIMESTAMP DEFAULT NOW(),
   active BOOLEAN NOT NULL DEFAULT TRUE,
   UNIQUE (retailer_id, sku)

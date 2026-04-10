@@ -26,6 +26,7 @@ time.sleep(random.uniform(2, 4))
 # Get HTML and check if scraping worked
 html = response.text
 print(html[:1000])
+#print(html)
 soup = BeautifulSoup(html, "html.parser")
 
 # Check for common error indicators
@@ -37,7 +38,7 @@ if "captcha" in html.lower() or "access denied" in html.lower() or len(html) < 1
 # application/ld+json is structured data accoording to Schema.org
 scripts = soup.find_all("script", type="application/ld+json")
 
-len(scripts)
+print(len(scripts))
 # there are multiple JSON-LD scripts because they describe different entities
 
 #print(scripts[0])
@@ -83,6 +84,42 @@ for script in scripts:
     # Extract SKU (Stock Keeping Unit) if available
     sku = data.get("sku")
 
+    # Extract images
+    gallery_image_urls = []
+    seen  = set()
+
+    images = data.get("image")
+    if isinstance(images, list):
+        image_url = images[0] if images else None
+    else:
+        image_url = images
+
+    for img in soup.find_all("img"):
+        src = img.get("src")
+        alt = img.get("alt", "")
+
+        if not src:
+            continue
+
+        # Alleen echte productafbeeldingen
+        if "image.coolblue.nl" not in src:
+            continue
+
+        # Skip thumbnails / transparante varianten
+        if "/transparent/" in src:
+            continue
+
+        # Alleen afbeeldingen uit de productgallery
+        if data.get("name", "").lower() not in alt.lower():
+            continue
+
+        # pak laatste deel van de URL en kijk of die al voorkomt
+        image_id = src.rstrip("/").split("/")[-1]
+
+        if image_id not in seen:
+            seen.add(image_id)
+            gallery_image_urls.append(src)
+
     # You can store additional values here as needed
     product_info = {
         "name": data.get("name"),
@@ -92,7 +129,9 @@ for script in scripts:
         "average_rating": average_rating,
         "review_count": review_count,
         "url": data.get("url"),
-        "sku": sku
+        "sku": sku,
+        "image_url": gallery_image_urls[0] if gallery_image_urls else image_url,
+        "all_image_urls": gallery_image_urls if gallery_image_urls else ([image_url] if image_url else []),
     }
     # Break after finding the first Product entity (optional)
     break

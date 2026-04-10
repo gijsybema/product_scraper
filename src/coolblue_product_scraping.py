@@ -199,6 +199,58 @@ def parse_product_json_ld(html: str) -> dict:
     raise ValueError(f"[PARSE] No Product JSON-LD found. HTML snippet: {snippet!r}")
 
 # ----------------------------
+# Image extraction layer
+# ----------------------------
+def extract_product_images(html: str, product_name: str, fallback_images) -> tuple[str | None, list[str]]:
+    soup = BeautifulSoup(html, "html.parser")
+
+    gallery_image_urls = []
+    seen = set()
+
+    product_name = (product_name or "").lower()
+
+    for img in soup.find_all("img"):
+        src = img.get("src")
+        alt = (img.get("alt") or "").lower()
+
+        if not src:
+            continue
+
+        if "image.coolblue.nl" not in src:
+            continue
+
+        if "/transparent/" in src:
+            continue
+
+        if product_name not in alt:
+            continue
+
+        # Deduplicatie op image id
+        image_id = src.rstrip("/").split("/")[-1]
+
+        if image_id in seen:
+            continue
+
+        seen.add(image_id)
+
+        # Forceer consistente resolutie
+        clean_url = f"https://image.coolblue.nl/max/700xauto/products/{image_id}"
+        gallery_image_urls.append(clean_url)
+
+    # Fallback naar JSON-LD image(s)
+    if isinstance(fallback_images, list):
+        fallback_main = fallback_images[0] if fallback_images else None
+        fallback_all = fallback_images
+    else:
+        fallback_main = fallback_images
+        fallback_all = [fallback_images] if fallback_images else []
+
+    if gallery_image_urls:
+        return gallery_image_urls[0], gallery_image_urls
+
+    return fallback_main, fallback_all
+
+# ----------------------------
 # Public scraping functions
 # ----------------------------
 def scrape_product_details(url: str, timeout=(5,20)) -> dict:
@@ -216,10 +268,21 @@ def scrape_product_details(url: str, timeout=(5,20)) -> dict:
     if isinstance(brand, dict):
         brand = brand.get("name")
 
+    # JSON-LD fallback images
+    fallback_images = product.get("image")
+
+    image_url, all_image_urls = extract_product_images(
+        html,
+        product.get("name"),
+        fallback_images
+    )
+
     return {
         "name": product.get("name"),
         "brand": brand,
         "product_url": product.get("url"),
+        "image_url": image_url,
+        "all_image_urls": all_image_urls,
     }
 
 def scrape_product_facts(url: str, timeout=(5, 20)) -> dict:
