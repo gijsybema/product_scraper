@@ -52,15 +52,17 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 sku,
                 name,
                 brand,
+                category,
                 product_url,
                 image_url,
                 all_image_urls,
                 active
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, true)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, true)
             ON CONFLICT (retailer_id, sku)
             DO UPDATE SET
                 name = EXCLUDED.name,
+                category = COALESCE(EXCLUDED.category, products.category),
                 product_url = EXCLUDED.product_url,
                 image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                 all_image_urls = CASE
@@ -77,6 +79,7 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 sku,
                 details["name"],
                 details.get("brand"),
+                details.get("category"),
                 product_url,
                 details.get("image_url"),
                 json.dumps(details.get("all_image_urls", [])),

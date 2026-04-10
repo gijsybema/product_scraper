@@ -61,6 +61,10 @@ current_price_since AS (
 SELECT
   p.id,
   p.name,
+  p.brand,
+  p.category,
+  p.product_url,
+  p.image_url,
   cp.current_price,
   m.max_price_30d AS previous_price,
   (m.max_price_30d - cp.current_price) AS price_diff,
@@ -68,7 +72,6 @@ SELECT
     ((m.max_price_30d - cp.current_price) / m.max_price_30d) * 100,
     1
   ) AS price_drop_pct,
-  p.product_url AS url,
   cps.price_level_since::text AS price_level_since
 FROM products p
 JOIN current_prices cp ON cp.product_id = p.id

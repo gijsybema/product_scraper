@@ -199,7 +199,7 @@ def parse_product_json_ld(html: str) -> dict:
     raise ValueError(f"[PARSE] No Product JSON-LD found. HTML snippet: {snippet!r}")
 
 # ----------------------------
-# Image extraction layer
+# Extraction layer of product details
 # ----------------------------
 def extract_product_images(html: str, product_name: str, fallback_images) -> tuple[str | None, list[str]]:
     soup = BeautifulSoup(html, "html.parser")
@@ -250,6 +250,33 @@ def extract_product_images(html: str, product_name: str, fallback_images) -> tup
 
     return fallback_main, fallback_all
 
+
+def extract_product_category(html: str) -> str | None:
+    soup = BeautifulSoup(html, "html.parser")
+
+    scripts = soup.find_all("script", type="application/ld+json")
+    for script in scripts:
+        try:
+            data = json.loads(script.string)
+        except (TypeError, json.JSONDecodeError):
+            continue
+
+        if data.get("@type") != "BreadcrumbList":
+            continue
+
+        items = data.get("itemListElement", [])
+        if not items:
+            return None
+
+        # voorkeur: tweede breadcrumb-item = hoofdcategorie
+        if len(items) >= 2:
+            return items[1].get("name")
+
+        # fallback: eerste breadcrumb-item
+        return items[0].get("name")
+
+    return None
+
 # ----------------------------
 # Public scraping functions
 # ----------------------------
@@ -277,12 +304,15 @@ def scrape_product_details(url: str, timeout=(5,20)) -> dict:
         fallback_images
     )
 
+    category = extract_product_category(html)
+
     return {
         "name": product.get("name"),
         "brand": brand,
         "product_url": product.get("url"),
         "image_url": image_url,
         "all_image_urls": all_image_urls,
+        "category": category,
     }
 
 def scrape_product_facts(url: str, timeout=(5, 20)) -> dict:
