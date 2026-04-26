@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS products (
   name TEXT NOT NULL,
   brand TEXT NOT NULL,
   category TEXT,
+  slug TEXT UNIQUE,
+  description TEXT,
+  specs JSONB,
+  retailer TEXT,
   product_url TEXT NOT NULL UNIQUE,
   image_url TEXT,
   all_image_urls JSONB,
@@ -85,4 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_scrape_runs_job_started
 CREATE INDEX IF NOT EXISTS idx_scrape_runs_next_retry
   ON scrape_runs(job_name, next_retry_at)
   WHERE next_retry_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_products_category ON products (category);
+CREATE INDEX IF NOT EXISTS idx_products_slug     ON products (slug);
 

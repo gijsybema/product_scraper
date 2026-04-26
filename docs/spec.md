@@ -70,6 +70,14 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 - Scheduler: Railway cron jobs (not updated until new schema is manually verified)
 - ORM: raw psycopg2 (no ORM added)
 - Deploy: Railway is linked to the `main` branch on GitHub — pushing to `main` automatically redeploys the Python cron scripts (e.g. `discover_products.py`, `scrape_price_history.py`). There is no migration runner; schema migrations are plain SQL files that must be applied manually to the Railway PostgreSQL DB. Always apply and verify the migration locally in pgAdmin 4 first, then apply to Railway before pushing any dependent code changes to `main`.
+- Schema sync: every change applied to the live DB (via a migration file) must also be reflected in `sql/schema.sql`. `schema.sql` is the authoritative "create from scratch" reference and must stay in sync with the live schema at all times.
+- Migration dependency checklist: after any `ALTER TABLE`, verify the following before pushing code:
+  - [ ] `sql/schema.sql` updated to match the new live schema
+  - [ ] `sql/views/deal_candidates.sql` — check named column references; re-apply view if columns were renamed or dropped
+  - [ ] `sql/views/dealpage_topdeals.sql`, `homepage_topdeals.sql` — use `SELECT *` from `deal_candidates`; verify no unintended columns are exposed
+  - [ ] `src/db.py` — check `upsert_product` INSERT/UPDATE column lists and `get_products_to_scrape` SELECT
+  - [ ] `scripts/send_alerts.py` — JOINs `products` with named columns; verify still valid
+  - [ ] `sql/db_analytical_checks.sql` — JOINs `products` by `id`; low risk but worth a quick scan
 - Frontend: Next.js on Vercel — do not touch in this phase
 - API layer: not added in this phase
 - Retailer: Coolblue only in this phase; `retailer` column added to support future expansion without rewrite
@@ -170,31 +178,31 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 
 ## 8. Task Breakdown
 
-| # | Task | Phase |
-|---|---|---|
-| ~~T1~~ | ~~Write and apply schema migration (products columns + indexes; scrape_runs already exists)~~ ✅ | ~~1~~ |
-| ~~T2~~ | ~~Write rollback SQL for migration~~ ✅ | ~~1~~ |
-| T3 | Implement category normalization function + controlled enum | 2 |
-| T4 | Implement slug generation function | 2 |
-| T5 | Backfill existing products with category + slug | 2 |
-| T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |
-| T7 | Verify scrape_runs writes are wired into all scripts | 4 |
-| T8 | Add structured observability summary to all scripts | 4 |
-| T9 | Implement data quality validation function | 5 |
-| T10 | Wire validation into DB write path; log skipped records | 5 |
-| T11 | Multi-category discovery: headphones (validate new schema end-to-end) | 6a |
-| T12 | Multi-category discovery: earbuds | 6b |
-| T13 | Multi-category discovery: speakers | 6c |
-| T14 | Multi-category discovery: soundbars | 6d |
-| T15 | Parser: description + specs for headphones | 7 |
-| T16 | Parser: description + specs for earbuds | 7 |
-| T17 | Parser: description + specs for speakers | 7 |
-| T18 | Parser: description + specs for soundbars | 7 |
-| T19 | Verify deal detection query across all four categories | 8 |
-| T20 | Update Railway cron jobs | 9 |
-| T21 | Update README and add-a-category guide | 10 |
-| T22 | Document scraping safety + source terms risk | 10 |
-| T23 | Edge-case parser tests + optional integration tests | 11 |
+| Status | # | Task | Phase |
+|---|---|---|---|
+| ✅ | T1 | Write and apply schema migration (products columns + indexes; scrape_runs already exists) | 1 |
+| ✅ | T2 | Write rollback SQL for migration | 1 |
+| ⬜ | T3 | Implement category normalization function + controlled enum | 2 |
+| ⬜ | T4 | Implement slug generation function | 2 |
+| ⬜ | T5 | Backfill existing products with category + slug | 2 |
+| ⬜ | T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |
+| ⬜ | T7 | Verify scrape_runs writes are wired into all scripts | 4 |
+| ⬜ | T8 | Add structured observability summary to all scripts | 4 |
+| ⬜ | T9 | Implement data quality validation function | 5 |
+| ⬜ | T10 | Wire validation into DB write path; log skipped records | 5 |
+| ⬜ | T11 | Multi-category discovery: headphones (validate new schema end-to-end) | 6a |
+| ⬜ | T12 | Multi-category discovery: earbuds | 6b |
+| ⬜ | T13 | Multi-category discovery: speakers | 6c |
+| ⬜ | T14 | Multi-category discovery: soundbars | 6d |
+| ⬜ | T15 | Parser: description + specs for headphones | 7 |
+| ⬜ | T16 | Parser: description + specs for earbuds | 7 |
+| ⬜ | T17 | Parser: description + specs for speakers | 7 |
+| ⬜ | T18 | Parser: description + specs for soundbars | 7 |
+| ⬜ | T19 | Verify deal detection query across all four categories | 8 |
+| ⬜ | T20 | Update Railway cron jobs | 9 |
+| ⬜ | T21 | Update README and add-a-category guide | 10 |
+| ⬜ | T22 | Document scraping safety + source terms risk | 10 |
+| ⬜ | T23 | Edge-case parser tests + optional integration tests | 11 |
 
 ---
 
