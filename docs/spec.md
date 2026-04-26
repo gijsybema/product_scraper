@@ -69,6 +69,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 - Database: PostgreSQL on Railway
 - Scheduler: Railway cron jobs (not updated until new schema is manually verified)
 - ORM: raw psycopg2 (no ORM added)
+- Deploy: Railway is linked to the `main` branch on GitHub — pushing to `main` automatically redeploys the Python cron scripts (e.g. `discover_products.py`, `scrape_price_history.py`). There is no migration runner; schema migrations are plain SQL files that must be applied manually to the Railway PostgreSQL DB. Always apply and verify the migration locally in pgAdmin 4 first, then apply to Railway before pushing any dependent code changes to `main`.
 - Frontend: Next.js on Vercel — do not touch in this phase
 - API layer: not added in this phase
 - Retailer: Coolblue only in this phase; `retailer` column added to support future expansion without rewrite
@@ -171,8 +172,8 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 
 | # | Task | Phase |
 |---|---|---|
-| T1 | Write and apply schema migration (products columns + indexes; scrape_runs already exists) | 1 |
-| T2 | Write rollback SQL for migration | 1 |
+| ~~T1~~ | ~~Write and apply schema migration (products columns + indexes; scrape_runs already exists)~~ ✅ | ~~1~~ |
+| ~~T2~~ | ~~Write rollback SQL for migration~~ ✅ | ~~1~~ |
 | T3 | Implement category normalization function + controlled enum | 2 |
 | T4 | Implement slug generation function | 2 |
 | T5 | Backfill existing products with category + slug | 2 |
@@ -211,8 +212,8 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 - [ ] Running scrape/discovery twice on the same day produces no duplicates
 - [ ] Every run logged in `scrape_runs` with summary counts and status
 - [ ] Each run prints a structured observability summary to stdout
-- [ ] Queries for category deals and product price history are fast (indexes in place)
-- [ ] Schema migration has a tested rollback path
+- [x] Queries for category deals and product price history are fast (indexes in place)
+- [x] Schema migration has a tested rollback path
 - [ ] Scripts use rate limiting, timeouts, and user-agent headers
 - [ ] Scraping logic is isolated from business logic (source abstraction)
 - [ ] Existing headphone products backfilled with valid category, slug, and required fields
