@@ -169,6 +169,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | Raw category text from Coolblue is inconsistent | Normalization function with explicit mapping + fallback logging for unknown values |
 | Some products have no category breadcrumb (e.g. Sony brand-path pages: `Home > Alle merken > Sony > ...`) | Use discovery URL as category fallback during backfill and discovery runs; confirmed affecting ~9/203 headphone products |
 | Slug collisions on backfill | Slug generation adds a suffix if collision detected |
+| Color variants treated as separate products (separate SKU, slug, price history) | Acceptable for now; if variant grouping is ever needed, requires schema change and slug strategy revision |
 | Railway cron updated before new schema is stable | Explicit constraint: do not update cron until manual verification passes |
 | Schema too tied to Coolblue | `retailer` column added; scraping logic isolated from business logic |
 | Rewriting too much at once | Strict slice-by-slice workflow; no phase spans more than one concern |
@@ -185,7 +186,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T2 | Write rollback SQL for migration | 1 |
 | ✅ | T3 | Implement category normalization function + controlled enum | 2 |
 | ✅ | T3b | Fix `extract_product_category()` to reliably identify the category breadcrumb item (not brand/product name) | 2 |
-| ⬜ | T4 | Implement slug generation function | 2 |
+| ✅ | T4 | Implement slug generation function | 2 |
 | ⬜ | T5 | Backfill existing products with category + slug; use discovery URL as category fallback for products with no category breadcrumb (e.g. Sony brand-path products) | 2 |
 | ⬜ | T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |
 | ⬜ | T7 | Verify scrape_runs writes are wired into all scripts | 4 |

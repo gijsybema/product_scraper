@@ -1,5 +1,7 @@
 #utils.py
 
+import re
+import unicodedata
 import requests
 
 # Slice A: controlled category enum
@@ -35,6 +37,25 @@ def normalize_category(raw: str | None) -> str | None:
             return _CATEGORY_MAP[key]
     print(f"[CATEGORY] Warning: unrecognized category '{raw}'")
     return None
+
+def generate_slug(name: str, existing_slugs: set[str]) -> str:
+    if not name or not name.strip():
+        raise ValueError("Product name must not be empty")
+    existing_slugs = set(existing_slugs)
+    normalized = unicodedata.normalize("NFKD", name)
+    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
+    lowered = ascii_name.lower()
+    hyphenated = re.sub(r"[^a-z0-9]+", "-", lowered)
+    slug = hyphenated.strip("-")
+    if not slug:
+        raise ValueError(f"Product name '{name}' produces an empty slug")
+    if slug not in existing_slugs:
+        return slug
+    counter = 2
+    while f"{slug}-{counter}" in existing_slugs:
+        counter += 1
+    return f"{slug}-{counter}"
+
 
 def fetch_debug(url: str):
     headers = {
