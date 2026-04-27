@@ -187,13 +187,14 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T3 | Implement category normalization function + controlled enum | 2 |
 | ✅ | T3b | Fix `extract_product_category()` to reliably identify the category breadcrumb item (not brand/product name) | 2 |
 | ✅ | T4 | Implement slug generation function | 2 |
-| ⬜ | T5 | Backfill existing products with category + slug; use discovery URL as category fallback for products with no category breadcrumb (e.g. Sony brand-path products) | 2 |
+| ✅ | T5 | Backfill existing products with category + slug; use discovery URL as category fallback for products with no category breadcrumb (e.g. Sony brand-path products) | 2 |
 | ⬜ | T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |
 | ⬜ | T7 | Verify scrape_runs writes are wired into all scripts | 4 |
 | ⬜ | T8 | Add structured observability summary to all scripts | 4 |
 | ⬜ | T9 | Implement data quality validation function | 5 |
 | ⬜ | T10 | Wire validation into DB write path; log skipped records | 5 |
-| ⬜ | T11 | Multi-category discovery: headphones (validate new schema end-to-end) | 6a |
+| ⬜ | T10b | Mark products inactive when price scrape returns 404; log deactivations in run summary | 5 |
+| ⬜ | T11 | Multi-category discovery: headphones (validate new schema end-to-end); wire slug generation into `upsert_product()` so every new product gets a slug on insert; re-run backfill after to catch any products added during weekly discovery runs | 6a |
 | ⬜ | T12 | Multi-category discovery: earbuds | 6b |
 | ⬜ | T13 | Multi-category discovery: speakers | 6c |
 | ⬜ | T14 | Multi-category discovery: soundbars | 6d |
