@@ -167,6 +167,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | Schema migration breaks existing headphone pipeline | Test migration on a DB snapshot first; write rollback SQL before applying |
 | Coolblue HTML structure differs per category | Inspect each category page before writing parsers; treat headphones as baseline |
 | Raw category text from Coolblue is inconsistent | Normalization function with explicit mapping + fallback logging for unknown values |
+| Some products have no category breadcrumb (e.g. Sony brand-path pages: `Home > Alle merken > Sony > ...`) | Use discovery URL as category fallback during backfill and discovery runs; confirmed affecting ~9/203 headphone products |
 | Slug collisions on backfill | Slug generation adds a suffix if collision detected |
 | Railway cron updated before new schema is stable | Explicit constraint: do not update cron until manual verification passes |
 | Schema too tied to Coolblue | `retailer` column added; scraping logic isolated from business logic |
@@ -183,9 +184,9 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T1 | Write and apply schema migration (products columns + indexes; scrape_runs already exists) | 1 |
 | ✅ | T2 | Write rollback SQL for migration | 1 |
 | ✅ | T3 | Implement category normalization function + controlled enum | 2 |
-| ⬜ | T3b | Fix `extract_product_category()` to reliably identify the category breadcrumb item (not brand/product name) | 2 |
+| ✅ | T3b | Fix `extract_product_category()` to reliably identify the category breadcrumb item (not brand/product name) | 2 |
 | ⬜ | T4 | Implement slug generation function | 2 |
-| ⬜ | T5 | Backfill existing products with category + slug | 2 |
+| ⬜ | T5 | Backfill existing products with category + slug; use discovery URL as category fallback for products with no category breadcrumb (e.g. Sony brand-path products) | 2 |
 | ⬜ | T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |
 | ⬜ | T7 | Verify scrape_runs writes are wired into all scripts | 4 |
 | ⬜ | T8 | Add structured observability summary to all scripts | 4 |

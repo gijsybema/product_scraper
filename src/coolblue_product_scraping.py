@@ -7,6 +7,11 @@ import json
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+try:
+    from src.utils import normalize_category
+except ModuleNotFoundError:
+    from utils import normalize_category
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -268,12 +273,10 @@ def extract_product_category(html: str) -> str | None:
         if not items:
             return None
 
-        # voorkeur: tweede breadcrumb-item = hoofdcategorie
-        if len(items) >= 2:
-            return items[1].get("name")
-
-        # fallback: eerste breadcrumb-item
-        return items[0].get("name")
+        for item in items:
+            category = normalize_category(item.get("name"))
+            if category is not None:
+                return category
 
     return None
 
