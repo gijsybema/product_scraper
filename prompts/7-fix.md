@@ -1,6 +1,6 @@
 # Fix Prompt
 
-Fix critical and high issues only.
+Fix critical, high and medium issues only.
 
 - No new features
 - No unrelated refactoring

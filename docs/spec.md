@@ -182,7 +182,8 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 |---|---|---|---|
 | ✅ | T1 | Write and apply schema migration (products columns + indexes; scrape_runs already exists) | 1 |
 | ✅ | T2 | Write rollback SQL for migration | 1 |
-| ⬜ | T3 | Implement category normalization function + controlled enum | 2 |
+| ✅ | T3 | Implement category normalization function + controlled enum | 2 |
+| ⬜ | T3b | Fix `extract_product_category()` to reliably identify the category breadcrumb item (not brand/product name) | 2 |
 | ⬜ | T4 | Implement slug generation function | 2 |
 | ⬜ | T5 | Backfill existing products with category + slug | 2 |
 | ⬜ | T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |

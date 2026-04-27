@@ -2,6 +2,40 @@
 
 import requests
 
+# Slice A: controlled category enum
+VALID_CATEGORIES = frozenset({"headphones", "earbuds", "speakers", "soundbars"})
+
+_CATEGORY_MAP = {
+    "hoofdtelefoon": "headphones",
+    "koptelefoon": "headphones",
+    "in-ear hoofdtelefoon": "earbuds",
+    "oortelefoon": "earbuds",
+    "earbud": "earbuds",
+    "speaker": "speakers",
+    "soundbar": "soundbars",
+}
+
+# Pre-sorted once at import time; longest key first so specific keys beat general ones
+_SORTED_KEYS = tuple(sorted(_CATEGORY_MAP, key=len, reverse=True))
+
+# Guard: every map value must be a valid category — catches typos at import time
+assert all(v in VALID_CATEGORIES for v in _CATEGORY_MAP.values()), (
+    "BUG: _CATEGORY_MAP contains a value not in VALID_CATEGORIES"
+)
+
+def normalize_category(raw: str | None) -> str | None:
+    if not raw or not raw.strip():
+        print("[CATEGORY] Warning: empty category value")
+        return None
+    lowered = raw.strip().lower()
+    if lowered in _CATEGORY_MAP:
+        return _CATEGORY_MAP[lowered]
+    for key in _SORTED_KEYS:
+        if key in lowered:
+            return _CATEGORY_MAP[key]
+    print(f"[CATEGORY] Warning: unrecognized category '{raw}'")
+    return None
+
 def fetch_debug(url: str):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
