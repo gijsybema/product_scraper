@@ -21,3 +21,15 @@
 - **Defer zero-value warnings to the observability task.** A `total_products=0` result is ambiguous (empty run vs. blocked scrape) but the right fix is a structured warning in T8, not a one-off print here. Noting it in the spec and moving on kept T7 small.
 
 ---
+
+## T8 — Structured observability summary across all scripts
+
+- **Slice by file, not by feature.** Doing one script per slice (S1→S2→S3) made review and fixes focused. The alternative — adding the summary block to all three scripts at once — would have bundled three sets of edge cases into one review cycle.
+- **`return` inside a `try` block triggers `finally` unexpectedly.** Moving early exits (no retry due, max retries) outside the `try` block before adding a `finally` summary prevented misleading `status=failed` output on normal no-op runs. Always check for `return`/`raise` inside `try` when adding a `finally`.
+- **Initialise all variables used in `finally` before the `try`.** `run_id = None`, `status = "failed"`, `success = 0` as defaults made the summary safe to print on any crash path. This is the pattern to follow in every new script.
+- **A bad fix attempt is worse than leaving a medium issue open.** The first attempt at fixing the pre-`try` unguarded exception used a `finally` clause that referenced unbound variables — introducing a new `NameError`. Reverting and keeping the original structure was cleaner. When a fix adds complexity, step back.
+- **Live testing expensive scripts only for logic changes, not print statements.** The jitter sleep (up to 10 minutes) makes full runs expensive. For pure observability changes (print statements in `finally`), a syntax check + code review is sufficient verification. Reserve live runs for changes that affect DB writes or scrape logic.
+- **Defer false-positive warnings to the task that introduces multi-category.** The zero-product warning is a false positive if a category genuinely has no products — but that case doesn't exist yet. Adding the warning now and noting the limitation in T11 is the right call; don't pre-solve hypothetical problems.
+- **Quote nesting in f-strings is a real friction point.** `due['id']` inside a double-quoted f-string is valid Python but flagged by some linters and confusing to read. Extracting to a named variable (`due_id = due["id"]`) is cleaner and avoids the issue entirely — do this by default.
+
+---

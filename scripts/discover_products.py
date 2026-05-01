@@ -83,9 +83,14 @@ def main():
     overall_start = time.time()
     products = discover_products()
 
+    if len(products) == 0:
+        print("WARNING: 0 products discovered — possible block or page structure change")
+
+    conn = None
     conn = get_connection()
     run_id = None
     success, failed = 0, 0
+    status = "failed"
     try:
         run_id = create_scrape_run(conn, job_name="discover_products", total_products=len(products))
         success, failed = process_products(conn, products)
@@ -107,11 +112,18 @@ def main():
         raise
 
     finally:
-        conn.close()
-
-    total_elapsed = time.time() - overall_start
-    print(f"Product discovery + enrichment completed in {total_elapsed:.1f} seconds")
-    print(f"Discovery finished: {success} succeeded, {failed} failed")
+        duration = time.time() - overall_start
+        print("=== RUN SUMMARY ===")
+        print(f"job       : discover_products")
+        print(f"run_id    : {run_id}")
+        print(f"status    : {status}")
+        print(f"total     : {len(products)}")
+        print(f"success   : {success}")
+        print(f"failed    : {failed}")
+        print(f"duration  : {duration:.1f}s")
+        print("===================")
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":

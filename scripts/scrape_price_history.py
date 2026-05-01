@@ -182,6 +182,7 @@ def main():
     print(f"Product lookup took {time.time() - start:.1f} seconds")
 
     conn = get_connection()
+    run_id = None
     run_id = create_scrape_run(
         conn,
         job_name="price_history_daily",
@@ -261,6 +262,17 @@ def main():
         except Exception as e:
             print("ERROR finishing scrape run:", e)
             print(traceback.format_exc())
+
+        duration = time.time() - overall_start
+        print("=== RUN SUMMARY ===")
+        print(f"job       : price_history_daily")
+        print(f"run_id    : {run_id}")
+        print(f"status    : {status}")
+        print(f"total     : {success + failed}")
+        print(f"success   : {success}")
+        print(f"failed    : {failed}")
+        print(f"duration  : {duration:.1f}s")
+        print("===================")
 
         try:
             conn.close()

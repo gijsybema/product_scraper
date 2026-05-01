@@ -31,26 +31,39 @@ def next_retry_time(now, next_attempt: int):
     return None
 
 def main():
+    overall_start = time.time()
     conn = get_connection()
+
+    due = get_due_retry_run(conn, job_name="price_history_daily")
+    if not due:
+        print("[RETRY] No retry due. Exiting.")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return
+
+    # prevent multiple retry workers from doing the same retry:
+    # clear the next_retry_at immediately (simple lock against double run)
+    due_id = due["id"]
+    clear_next_retry(conn, due_id)
+    print(f"[RETRY] Claimed retry for run_id={due_id}")
+
+    current_attempt = due["retry_attempt"]          # 0..4 (stored on the prior rim row)
+    this_attempt = current_attempt + 1              # 1..5 (this retry run)
+
+    if this_attempt > 4:
+        print(f"[RETRY] Max retries reached (current_attempt={current_attempt}). Not retrying.")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return
+
+    retry_run_id = None
+    success, failed = 0, 0
+    status = "failed"
     try:
-        due = get_due_retry_run(conn, job_name="price_history_daily")
-        if not due:
-            print("[RETRY] No retry due. Exiting.")
-            return
-
-        # prevent multiple retry workers from doing the same retry:
-        # clear the next_retry_at immediately (simple lock against double run)
-        clear_next_retry(conn, due["id"])
-        print(f"[RETRY] Claimed retry for run_id={due['id']}")
-
-        current_attempt = due["retry_attempt"]          # 0..4 (stored on the prior rim row)
-        this_attempt = current_attempt + 1              # 1..5 (this retry run)
-
-        # If we already did 4 retries, stop
-        if this_attempt > 4:
-            print(f"[RETRY] Max retries reached (current_attempt={current_attempt}). Not retrying.")
-            return
-
         # small jitter so retries don’t stack on the quarter-hour
         jitter_seconds = random.uniform(0, 5 * 60)
         print(f"[RETRY] Jitter sleeping {jitter_seconds:.0f}s")
@@ -116,6 +129,17 @@ def main():
         print(traceback.format_exc())
         raise
     finally:
+        duration = time.time() - overall_start
+        print("=== RUN SUMMARY ===")
+        print(f"job       : price_history_retry")
+        print(f"run_id    : {retry_run_id}")
+        print(f"attempt   : {this_attempt}")
+        print(f"status    : {status}")
+        print(f"total     : {success + failed}")
+        print(f"success   : {success}")
+        print(f"failed    : {failed}")
+        print(f"duration  : {duration:.1f}s")
+        print("===================")
         conn.close()
 
 if __name__ == "__main__":

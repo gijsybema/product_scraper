@@ -46,8 +46,11 @@ Implement → Verify → Review → Fix → Repeat (until task is done)
 
 ## Error Handling Rules
 - In exception handlers, always wrap secondary operations (e.g. DB logging, run log writes) in their own try/except — a failure in the handler must never replace the original exception
+- Always initialise variables used in `finally` before the `try` block (`run_id = None`, `status = "failed"`, `success = 0`) — the summary or cleanup must be safe to execute on any crash path
+- When adding a `finally` to an existing `try`, check for `return`/`raise` inside the `try` first — they trigger `finally` and can produce misleading output if defaults are not set
 
 ## Testing Conventions
 - One test file per source module: `tests/test_utils.py` → `src/utils.py`, `tests/test_db.py` → `src/db.py`
 - Tests are pure where possible — no live DB, no network calls
 - Idempotency is verified by inspecting SQL source strings, not by executing queries
+- Do not live-test scripts for print-only changes — a syntax check + code review is sufficient; reserve live runs for changes that affect DB writes or scrape logic
