@@ -14,7 +14,7 @@ Provide:
 1. Relevant files/components
 2. How the current system works
 3. Assumptions or ambiguities
-4. Minimal implementation plan
+4. Minimal implementation plan — including any new files to create (name, location, why)
 5. Breakdown into small slices
 6. Recommended first slice
 7. Risks or likely failure points
