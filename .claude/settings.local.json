@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git -C \"C:\\\\Users\\\\gijsy\\\\Documents\\\\Github projects\\\\product_scraper\" branch --show-current)",
-      "Bash(find \"C:\\\\Users\\\\gijsy\\\\Documents\\\\Github projects\\\\product_scraper\" -name \"*.py\" -not -path \"*/.venv/*\" -not -path \"*\\\\\\\\.venv\\\\\\\\*\")"
-    ]
-  }
-}
