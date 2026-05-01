@@ -7,9 +7,10 @@ matplotlib
 seaborn
 plotly
 
-# Optional: Add other dependencies as needed
+# Other dependencies
 requests
 beautifulsoup4
 httpx
 psycopg2-binary
 dotenv
+pytest

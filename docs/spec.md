@@ -188,7 +188,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T3b | Fix `extract_product_category()` to reliably identify the category breadcrumb item (not brand/product name) | 2 |
 | ✅ | T4 | Implement slug generation function | 2 |
 | ✅ | T5 | Backfill existing products with category + slug; use discovery URL as category fallback for products with no category breadcrumb (e.g. Sony brand-path products) | 2 |
-| ⬜ | T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |
+| ✅ | T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |
 | ⬜ | T7 | Verify scrape_runs writes are wired into all scripts | 4 |
 | ⬜ | T8 | Add structured observability summary to all scripts | 4 |
 | ⬜ | T9 | Implement data quality validation function | 5 |
