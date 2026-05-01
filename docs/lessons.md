@@ -11,3 +11,13 @@
 - **Source inspection (`inspect.getsource`) is a pragmatic way to test SQL contracts** without a live DB. It's not a substitute for integration tests but catches accidental rewrites cheaply.
 
 ---
+
+## T7 — Wire scrape_runs into discover_products.py
+
+- **Architectural questions before implementation are worth the time.** The meta-discussion about retry logic (is `retry_scrape_price_history.py` over-engineered?) took 10 minutes but prevented adding the same pattern to `discover_products.py`. The answer was "don't extend it" — that only comes from asking first.
+- **The review step caught a real bug.** The medium issue — `finish_scrape_run` throwing in the except block would swallow the original exception — was not caught during implementation or verification. The review step is doing its job; don't skip it on "simple" tasks.
+- **Wrap logging calls in exception paths defensively.** When you log failure inside an except block, that log call can itself fail (dead connection, serialisation error). Always wrap it in its own try/except so the original exception is never replaced by a secondary one.
+- **Recon on a reference implementation is faster than reading docs.** Reading `scrape_price_history.py` gave the exact call signature, commit pattern, and status values in one pass — no need to re-read `db.py` in depth.
+- **Defer zero-value warnings to the observability task.** A `total_products=0` result is ambiguous (empty run vs. blocked scrape) but the right fix is a structured warning in T8, not a one-off print here. Noting it in the spec and moving on kept T7 small.
+
+---

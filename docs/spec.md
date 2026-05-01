@@ -181,8 +181,8 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T4 | Implement slug generation function | 2 |
 | ✅ | T5 | Backfill existing products with category + slug; use discovery URL as category fallback for products with no category breadcrumb (e.g. Sony brand-path products) | 2 |
 | ✅ | T6 | Unit tests: normalization, slug, deal detection, idempotency | 3 |
-| ⬜ | T7 | Verify scrape_runs writes are wired into all scripts | 4 |
-| ⬜ | T8 | Add structured observability summary to all scripts | 4 |
+| ✅ | T7 | Wire scrape_runs logging into discover_products.py (scrape_price_history.py and retry_scrape_price_history.py were already wired) | 4 |
+| ⬜ | T8 | Add structured observability summary to all scripts; include a warning when `discover_products.py` finishes with `total_products=0` (may indicate a blocked/failed discovery run) | 4 |
 | ⬜ | T9 | Implement data quality validation function | 5 |
 | ⬜ | T10 | Wire validation into DB write path; log skipped records | 5 |
 | ⬜ | T10b | Mark products inactive when price scrape returns 404; log deactivations in run summary | 5 |
@@ -195,7 +195,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ⬜ | T17 | Parser: description + specs for speakers | 7 |
 | ⬜ | T18 | Parser: description + specs for soundbars | 7 |
 | ⬜ | T19 | Verify deal detection query across all four categories | 8 |
-| ⬜ | T20 | Update Railway cron jobs | 9 |
+| ⬜ | T20 | Update Railway cron jobs; retire `retry_scrape_price_history.py` and replace hourly retry cron with a second daily run of `scrape_price_history.py` (e.g. 07:00 + 19:00); optionally add single within-script retry for transient failures; remove `get_due_retry_run` and `clear_next_retry` from `src/db.py` | 9 |
 | ⬜ | T21 | Update README and add-a-category guide | 10 |
 | ⬜ | T22 | Document scraping safety + source terms risk | 10 |
 | ⬜ | T23 | Edge-case parser tests + optional integration tests | 11 |

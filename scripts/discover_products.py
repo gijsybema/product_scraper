@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.coolblue_discovery import get_all_coolblue_products
 from src.coolblue_product_scraping import scrape_product_details
-from src.db import get_connection, upsert_product
+from src.db import get_connection, upsert_product, create_scrape_run, finish_scrape_run
 from src.utils import print_progress
 
 
@@ -84,14 +84,26 @@ def main():
     products = discover_products()
 
     conn = get_connection()
+    run_id = None
+    success, failed = 0, 0
     try:
+        run_id = create_scrape_run(conn, job_name="discover_products", total_products=len(products))
         success, failed = process_products(conn, products)
         conn.commit()
         print("COMMITTING TRANSACTION")
 
+        total = len(products)
+        status = "success" if failed == 0 else ("partial" if failed < total else "failed")
+        finish_scrape_run(conn, run_id=run_id, status=status, success_count=success, failed_count=failed)
+
     except Exception as e:
         conn.rollback()
         print("ERROR during product discovery:", e)
+        if run_id is not None:
+            try:
+                finish_scrape_run(conn, run_id=run_id, status="failed", success_count=success, failed_count=failed, last_error=str(e))
+            except Exception as log_err:
+                print(f"WARNING: could not write failed run log: {log_err}")
         raise
 
     finally:

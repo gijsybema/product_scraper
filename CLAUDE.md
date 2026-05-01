@@ -44,6 +44,9 @@ Implement → Verify → Review → Fix → Repeat (until task is done)
 - [ ] `src/db.py` — check `upsert_product` INSERT/UPDATE column lists and `get_products_to_scrape` SELECT
 - [ ] `scripts/send_alerts.py` — JOINs `products` with named columns; verify still valid
 
+## Error Handling Rules
+- In exception handlers, always wrap secondary operations (e.g. DB logging, run log writes) in their own try/except — a failure in the handler must never replace the original exception
+
 ## Testing Conventions
 - One test file per source module: `tests/test_utils.py` → `src/utils.py`, `tests/test_db.py` → `src/db.py`
 - Tests are pure where possible — no live DB, no network calls

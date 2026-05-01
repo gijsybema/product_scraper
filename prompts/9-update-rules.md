@@ -1,4 +1,15 @@
-Update CLAUDE.md and spec.md based on the flags from the lesson summary:
-1. Add flagged rules or conventions to `CLAUDE.md`
-2. Remove anything in `spec.md` that duplicates `CLAUDE.md`; replace with a pointer
-3. Update any stale rules in `CLAUDE.md` in place
+Update `CLAUDE.md` and `docs/spec.md` to reflect the completed task.
+
+**CLAUDE.md** (based on flags from the lesson summary):
+1. Add any flagged rules or conventions
+2. Update stale rules in place
+3. Remove duplicates
+
+**docs/spec.md**:
+1. Remove anything in `spec.md` that duplicates `CLAUDE.md`; replace with a pointer
+2. Mark completed tasks as done
+3. Update sections that changed during implementation
+4. Remove or correct anything stale or inaccurate
+5. Do not add new requirements or expand scope
+
+Keep both concise and factual.
