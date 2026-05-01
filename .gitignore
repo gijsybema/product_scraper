@@ -193,3 +193,6 @@ cython_debug/
 
 # VS Code local .history
 .history/
+
+# Claude Code local settings
+.claude/settings.local.json
