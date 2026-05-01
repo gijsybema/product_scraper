@@ -69,15 +69,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 - Database: PostgreSQL on Railway
 - Scheduler: Railway cron jobs (not updated until new schema is manually verified)
 - ORM: raw psycopg2 (no ORM added)
-- Deploy: Railway is linked to the `main` branch on GitHub — pushing to `main` automatically redeploys the Python cron scripts (e.g. `discover_products.py`, `scrape_price_history.py`). There is no migration runner; schema migrations are plain SQL files that must be applied manually to the Railway PostgreSQL DB. Always apply and verify the migration locally in pgAdmin 4 first, then apply to Railway before pushing any dependent code changes to `main`.
-- Schema sync: every change applied to the live DB (via a migration file) must also be reflected in `sql/schema.sql`. `schema.sql` is the authoritative "create from scratch" reference and must stay in sync with the live schema at all times.
-- Migration dependency checklist: after any `ALTER TABLE`, verify the following before pushing code:
-  - [ ] `sql/schema.sql` updated to match the new live schema
-  - [ ] `sql/views/deal_candidates.sql` — check named column references; re-apply view if columns were renamed or dropped
-  - [ ] `sql/views/dealpage_topdeals.sql`, `homepage_topdeals.sql` — use `SELECT *` from `deal_candidates`; verify no unintended columns are exposed
-  - [ ] `src/db.py` — check `upsert_product` INSERT/UPDATE column lists and `get_products_to_scrape` SELECT
-  - [ ] `scripts/send_alerts.py` — JOINs `products` with named columns; verify still valid
-  - [ ] `sql/db_analytical_checks.sql` — JOINs `products` by `id`; low risk but worth a quick scan
+- Deploy: Railway is linked to the `main` branch on GitHub — pushing to `main` automatically redeploys the Python cron scripts (e.g. `discover_products.py`, `scrape_price_history.py`). There is no migration runner; schema migrations are plain SQL files that must be applied manually to the Railway PostgreSQL DB. See `CLAUDE.md` for deploy and migration rules.
 - Frontend: Next.js on Vercel — do not touch in this phase
 - API layer: not added in this phase
 - Retailer: Coolblue only in this phase; `retailer` column added to support future expansion without rewrite
