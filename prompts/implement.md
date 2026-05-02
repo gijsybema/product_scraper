@@ -27,6 +27,14 @@ After reporting, immediately run a quick sanity check — do not wait to be aske
 
 Fix critical issues immediately. List anything else but do not fix unless asked.
 
+## Manual testing handoff
+
+If Claude cannot fully verify (no prod DB access, UI interaction required, external service needed, etc.):
+1. State what cannot be verified and why
+2. List the specific scenarios to test: steps, inputs, expected outputs
+3. Stop with: **MANUAL TEST REQUIRED** — test the above and reply with pass/fail before proceeding
+4. Do not mark the task done or continue until the user confirms
+
 If this reveals an invalid assumption or missing dependency:
 - In FAST mode: flag it and ask how to proceed.
 - In NORMAL mode: flag it and run @plan.md if at least one of these is true: (1) more than one additional file needs to change beyond what was originally described, (2) the original approach is no longer viable and a different one is needed.

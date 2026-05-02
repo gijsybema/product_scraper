@@ -184,7 +184,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T7 | Wire scrape_runs logging into discover_products.py (scrape_price_history.py and retry_scrape_price_history.py were already wired) | 4 |
 | ✅ | T8 | Add structured observability summary to all scripts; include a warning when `discover_products.py` finishes with `total_products=0` (may indicate a blocked/failed discovery run) | 4 |
 | ✅ | T9 | Implement data quality validation function | 5 |
-| ⬜ | T10 | Wire validation into DB write path; log skipped records | 5 |
+| ✅ | T10 | Wire validation into DB write path; log skipped records | 5 |
 | ⬜ | T10b | Mark products inactive when price scrape returns 404; log deactivations in run summary | 5 |
 | ⬜ | T11 | Multi-category discovery: headphones (validate new schema end-to-end); wire slug generation into `upsert_product()` so every new product gets a slug on insert; re-run backfill after to catch any products added during weekly discovery runs; update zero-product warning in `discover_products.py` to be category-aware (current warning is a false positive if a category genuinely has no products) | 6a |
 | ⬜ | T12 | Multi-category discovery: earbuds | 6b |

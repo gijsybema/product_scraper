@@ -58,6 +58,8 @@ Plan → Approve → Implement → Verify → Wrap-up → Commit
 ### Escalation
 If scope or risk grows beyond the chosen mode mid-task: stop, state the new mode, and re-run @plan.md before continuing. Do not implement further until the new plan is approved.
 
+### Manual Testing Handoff
+If verification cannot be completed (no prod DB access, UI interaction required, external service needed, etc.): state what cannot be verified, list exact test scenarios (steps, inputs, expected outputs), and stop with **MANUAL TEST REQUIRED**. Do not mark a task done until the user confirms pass/fail.
 
 ## Deploy & Migration Rules
 - Never update Railway cron jobs until the full pipeline has been manually verified
@@ -80,6 +82,8 @@ If scope or risk grows beyond the chosen mode mid-task: stop, state the new mode
 - Validation functions return `(bool, list[str])` — a valid flag and a list of human-readable error reasons
 - Validators mirror write path functions: one validator per DB write function, accepting the same dict shape
 - When a field is intentionally left non-blocking pending a future task, add a comment referencing that task (e.g. `# category=None allowed until T11`)
+- Validation failures are deterministic — do not retry them. In a retry loop, call validation after scraping and return early before the retry logic. Use `return False, ValueError(...)` to signal a validation failure to the caller.
+- In scripts that track both `failed` and `skipped` counts: skipped = validation/quality issue (non-retriable, no DB write attempted); failed = scrape or DB error (retriable). Keep these counters separate.
 
 ## Testing Conventions
 - One test file per source module: `tests/test_utils.py` → `src/utils.py`, `tests/test_db.py` → `src/db.py`

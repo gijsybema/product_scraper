@@ -19,4 +19,12 @@ Fix critical and high immediately. List medium and low but do not fix unless ask
 
 If this reveals an invalid assumption or missing dependency, stop, flag it, and re-run @plan.md before continuing.
 
-If no issues, confirm the task is done.
+## Manual testing handoff
+
+If any part of the verification cannot be completed (no prod DB access, UI interaction required, external service needed, etc.):
+1. State what cannot be verified and why
+2. List the specific scenarios to test: steps, inputs, expected outputs
+3. Stop with: **MANUAL TEST REQUIRED** — test the above and reply with pass/fail before proceeding
+4. Do not mark the task done until the user confirms
+
+If no issues (and no manual testing required), confirm the task is done.

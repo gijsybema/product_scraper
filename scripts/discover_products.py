@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.coolblue_discovery import get_all_coolblue_products
 from src.coolblue_product_scraping import scrape_product_details
 from src.db import get_connection, upsert_product, create_scrape_run, finish_scrape_run
-from src.utils import print_progress
+from src.utils import print_progress, validate_product_details
 
 
 def discover_products(category_url=None):
@@ -39,6 +39,7 @@ def process_products(conn, products):
     total = len(products)
     success = 0
     failed = 0
+    skipped = 0
     total_iter_time = 0.0
 
     for idx, product in enumerate(products):
@@ -62,6 +63,12 @@ def process_products(conn, products):
 
             details = scrape_product_details(product_url)
 
+            valid, reasons = validate_product_details(details)
+            if not valid:
+                skipped += 1
+                print(f"[VALIDATION SKIP] sku={sku} reasons={reasons}")
+                continue
+
             upsert_product(
                 conn,
                 sku=sku,
@@ -76,7 +83,7 @@ def process_products(conn, products):
             failed += 1
             print(f"⚠️  Failed to process {sku}: {e}")
 
-    return success, failed
+    return success, failed, skipped
 
 
 def main():
@@ -89,11 +96,11 @@ def main():
     conn = None
     conn = get_connection()
     run_id = None
-    success, failed = 0, 0
+    success, failed, skipped = 0, 0, 0
     status = "failed"
     try:
         run_id = create_scrape_run(conn, job_name="discover_products", total_products=len(products))
-        success, failed = process_products(conn, products)
+        success, failed, skipped = process_products(conn, products)
         conn.commit()
         print("COMMITTING TRANSACTION")
 
@@ -120,6 +127,7 @@ def main():
         print(f"total     : {len(products)}")
         print(f"success   : {success}")
         print(f"failed    : {failed}")
+        print(f"skipped   : {skipped}")
         print(f"duration  : {duration:.1f}s")
         print("===================")
         if conn:

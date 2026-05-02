@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.db import get_connection, upsert_price_history, get_products_to_scrape
 from src.db import create_scrape_run, finish_scrape_run
 from src.coolblue_product_scraping import scrape_product_facts
-from src.utils import print_progress
+from src.utils import print_progress, validate_price_facts
 from scripts.detect_drops import run_detect_drops
 
 def process_single_product(conn, product_id: int, product_url: str, scraped_at) -> Tuple[bool, Optional[Exception]]:
@@ -41,6 +41,10 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
             in_stock = facts.get("in_stock")
             rating = facts.get("rating")
             review_count = facts.get("review_count")
+
+            valid, reasons = validate_price_facts({"price": price, "in_stock": in_stock})
+            if not valid:
+                return False, ValueError(f"[VALIDATION] product_id={product_id} reasons={reasons}")
 
             upsert_price_history(
                 conn,

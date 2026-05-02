@@ -41,3 +41,9 @@
 - **Pure functions with `(bool, list[str])` returns are frictionless to test.** No mocking, no fixtures — just call with a dict and assert. Established as the validation signature pattern for this project; follow it for any future validators (e.g. specs in T15–T18).
 
 ---
+
+## T10 — Wire validation into DB write path; log skipped records
+
+- **Validation failures are a different failure mode from scrape failures.** Distinguishing `skipped` (quality issue, non-retriable) from `failed` (scrape error, retriable) keeps fail-ratio metrics honest and prevents wasted retry attempts. This distinction should be decided at plan time, not implementation time.
+
+---
