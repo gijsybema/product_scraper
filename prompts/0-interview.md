@@ -73,4 +73,4 @@ Important:
 - Prefer concrete decisions over abstract descriptions
 
 ## Output
-Save the output of the interview in a file called `\docs\spec.md`  
+Save the output of the interview in a file called `docs/spec.md`  
