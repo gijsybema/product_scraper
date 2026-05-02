@@ -1,119 +1,111 @@
 # Coolblue Headphones Price Tracker
 
-This project is a data collection and analysis tool for tracking price and availability of headphones listed on [Coolblue](https://www.coolblue.nl/). It includes automated web scraping, historical price tracking, and utilities for analyzing product trends.
+Automated price tracking pipeline for headphones on [Coolblue](https://www.coolblue.nl/). Discovers products weekly, scrapes prices daily, detects drops, and sends Telegram alerts.
 
-## Features
+## How it works
 
-- **Automated scraping** of product price, name, brand, SKU, and stock status from Coolblue.
-- **Historical price tracking:** Prices and product data are appended to a CSV file with timestamps for longitudinal analysis.
-- **Product discovery:** Scripted collection of product URLs for all headphones on Coolblue.
-- **Structured data extraction:** Uses BeautifulSoup to parse JSON-LD enriched data for robust product info retrieval.
-- **Modular code**: Source modules for scraping/processing/data handling and utility scripts.
+```
+discover_products  (weekly)
+    → crawl category pages → scrape product detail pages → upsert to products table
 
----
-
-## Project Structure
-
-- `src/` - Core scraping modules and helper functions (e.g., `coolblue_product_scraping.py`)
-- `data/` - Collected datasets, including `products.json` (list of discovered headphone URLs) and `price_history.csv` (historical prices and info)
-- `notebooks/` - Jupyter notebooks for exploratory analysis, plotting, and reporting
-- `scripts/` - CLI/automation scripts (e.g., `discover_products.py`, `scrape_price_history.py`) for running scraping jobs and building the datasets
-
----
-
-## Installation & Setup
-
-1. **Create a virtual environment** (recommended):
-    ```bash
-    python -m venv .venv
-    ```
-
-2. **Activate the virtual environment**
-    - Windows:
-        ```bash
-        .venv\Scripts\activate
-        ```
-    - macOS/Linux:
-        ```bash
-        source .venv/bin/activate
-        ```
-
-3. **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *Note: If `requirements.txt` is missing, minimally install `beautifulsoup4`, `requests`, and `pandas` to get started.*
-
----
-
-## Quickstart
-
-1. **Discover all headphones and populate the database:**
-
-    ```bash
-    python scripts/discover_products.py
-    # Output: Product metadata is discovered and stored directly in the database.
-    ```
-
-2. **Scrape current prices and update price history in the database:**
-
-    ```bash
-    python scripts/scrape_price_history.py
-    # Output: Today's prices and facts for all products are stored in the database price_history table.
-    ```
-
-
----
-
-## Reset whole database
-To clear all tables in the database and reset indices the whole database, run the following SQL command (use with caution):
-
-
-```sql
-TRUNCATE TABLE
-    price_history,
-    products,
-    retailers
-RESTART IDENTITY
-CASCADE;
+scrape_price_history  (daily)
+    → scrape price + availability per product → upsert to price_history
+    → detect_drops runs inline
+    → send_alerts sends qualifying drops via Telegram
 ```
 
-## Add Coolblue to retailers
+## Scripts
 
-```sql
-INSERT INTO retailers (name, base_url)
-VALUES ('Coolblue', 'https://coolblue.nl');
+| Script | Schedule | What it does |
+|---|---|---|
+| `scripts/discover_products.py` | Weekly | Crawls Coolblue category pages, enriches each product with detail page metadata, upserts to `products` |
+| `scripts/scrape_price_history.py` | Daily | Scrapes price + availability for all active products, upserts to `price_history`, runs drop detection inline |
+| `scripts/detect_drops.py` | Inline (daily run) | Compares today vs. previous price, inserts qualifying drops to `price_drops` |
+| `scripts/send_alerts.py` | After daily run | Sends unsent drops (≥5% drop, ≥€150) as Telegram messages |
+
+## Database schema
+
+| Table | Purpose |
+|---|---|
+| `retailers` | Retailer registry (currently only Coolblue) |
+| `products` | Product catalogue — name, brand, category, specs, URLs |
+| `price_history` | Daily price, availability, rating, review count per product |
+| `price_drops` | Detected price drops with old/new price and drop % |
+| `scrape_runs` | Audit log for every script run (status, counts, errors, retry schedule) |
+
+Schema source of truth: [`sql/schema.sql`](sql/schema.sql)
+
+## Setup
+
+### Local
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-## Current Status
+Create `.env.local`:
 
-- Scraper functions are operational for:
-    - Collecting brand, product name, URL, ratings, review counts, price, and availability from Coolblue product pages
-    - Upserting product name, brand, URL into the PostgreSQL `products` table per weekly run (see `discover_products.py`)
-    - Upserting price and availability data into the PostgreSQL `price_history` table for each daily run (see `scrape_price_history.py`)
-    - Uses modular code structure: database, scraping, and utility functions split out in `src/`
-    - Designed to run as a scheduled task (e.g. via cron or Task Scheduler)
+```
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=pricetracker
+DB_USER=postgres
+DB_PASSWORD=your_password
+TELEGRAM_BOT_TOKEN=your_token
+TELEGRAM_CHAT_ID=your_chat_id
+```
 
-- Data for headphones collected in first run and stored in both the database and local CSV
-- Scripts validated on multiple products (>10 SKUs), with stable operation
-- Easy extension to other product categories possible by modifying `discover_products.py`
-- Installation and quickstart instructions included for reproducibility
+### Railway (production)
 
+Set `DATABASE_URL` — this takes precedence over all `DB_*` vars. Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as env vars.
 
----
+## Running scripts
 
-## Next Steps / Roadmap
-- Add retry logic outside of run: what if certain product is not loaded correctly, try again in case of certain errors (http_error, parse_error(?))
-- Add retry logic within run
-- Progress reporting and error capture for each product scrape in both scripts
-- Alternatives for windows task scheduler
-- implement better logging for tasks
-- [ ] Improve robustness of scraper to handle captchas/blocks, edge cases (if needed)
-- [ ] Add retry logic and proxy support (if needed)
-- [ ] Expand data model with more product fields (e.g., ratings, reviews) (optional)
-- [ ] Database integration for scalable historical storage 
-- [ ] Publish analysis notebooks and interactive dashboards
-- [ ] Schedule scraping runs (e.g., with cron/job scheduler)
-- [ ] Add unit tests for scraping and parsing logic
+```bash
+python scripts/discover_products.py
+python scripts/scrape_price_history.py
+python scripts/send_alerts.py
+```
 
----
+## Project structure
+
+```
+src/
+  config.py                        # env/db config
+  db.py                            # all DB reads/writes
+  coolblue_discovery.py            # category page crawler
+  coolblue_product_scraping.py     # product + price page scraper
+  utils.py                         # helpers + validation
+
+scripts/
+  discover_products.py
+  scrape_price_history.py
+  detect_drops.py
+  send_alerts.py
+  retry_scrape_price_history.py
+  check_category_coverage.py
+  backfill_category_slug.py
+
+sql/
+  schema.sql                       # authoritative DDL
+  views/                           # deal page and homepage views
+  migrate_001_products_columns.sql
+  db_healthchecks.sql
+  db_analytical_checks.sql
+```
+
+## Useful SQL
+
+Reset all tables (caution — destructive):
+
+```sql
+TRUNCATE TABLE price_history, products, retailers RESTART IDENTITY CASCADE;
+```
+
+Seed retailer:
+
+```sql
+INSERT INTO retailers (name, base_url) VALUES ('Coolblue', 'https://coolblue.nl');
+```
