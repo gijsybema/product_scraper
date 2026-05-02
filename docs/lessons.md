@@ -33,3 +33,11 @@
 - **Quote nesting in f-strings is a real friction point.** `due['id']` inside a double-quoted f-string is valid Python but flagged by some linters and confusing to read. Extracting to a named variable (`due_id = due["id"]`) is cleaner and avoids the issue entirely — do this by default.
 
 ---
+
+## T9 — Implement data quality validation function
+
+- **Two write paths → two validators.** When a module has two separate DB write functions (`upsert_product` and `upsert_price_history`) with different field shapes, separate validators per write path are cleaner than one combined function. Mirror the write path structure in validation design.
+- **Deliberate temporary exceptions need a task reference.** `category=None` is allowed in `validate_product_details` to avoid blocking valid writes before T11 closes the gap. Without noting this, a future tightening pass will either over-block or silently leave the exception in place. Flag intentional deferrals at the point of decision.
+- **Pure functions with `(bool, list[str])` returns are frictionless to test.** No mocking, no fixtures — just call with a dict and assert. Established as the validation signature pattern for this project; follow it for any future validators (e.g. specs in T15–T18).
+
+---

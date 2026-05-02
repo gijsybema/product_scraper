@@ -57,6 +57,60 @@ def generate_slug(name: str, existing_slugs: set[str]) -> str:
     return f"{slug}-{counter}"
 
 
+def validate_product_details(details: dict) -> tuple[bool, list[str]]:
+    """
+    Validate product metadata before upsert_product.
+    Returns (is_valid, [error_messages]).
+    """
+    errors = []
+
+    name = details.get("name")
+    if not name or not str(name).strip():
+        errors.append("missing or empty 'name'")
+
+    product_url = details.get("product_url")
+    if not product_url or not str(product_url).strip():
+        errors.append("missing or empty 'product_url'")
+    elif not str(product_url).startswith(("http://", "https://")):
+        errors.append(f"invalid 'product_url': {product_url!r}")
+
+    image_url = details.get("image_url")
+    if not image_url or not str(image_url).strip():
+        errors.append("missing or empty 'image_url'")
+    elif not str(image_url).startswith(("http://", "https://")):
+        errors.append(f"invalid 'image_url': {image_url!r}")
+
+    category = details.get("category")
+    if category is not None and category not in VALID_CATEGORIES:
+        errors.append(f"invalid 'category': {category!r}")
+
+    return (len(errors) == 0, errors)
+
+
+def validate_price_facts(facts: dict) -> tuple[bool, list[str]]:
+    """
+    Validate daily price facts before upsert_price_history.
+    Returns (is_valid, [error_messages]).
+    """
+    errors = []
+
+    price = facts.get("price")
+    if price is None:
+        errors.append("missing 'price'")
+    else:
+        try:
+            if float(price) <= 0:
+                errors.append(f"'price' must be > 0, got {price!r}")
+        except (TypeError, ValueError):
+            errors.append(f"'price' must be numeric, got {price!r}")
+
+    in_stock = facts.get("in_stock")
+    if not isinstance(in_stock, bool):
+        errors.append(f"'in_stock' must be boolean, got {type(in_stock).__name__}: {in_stock!r}")
+
+    return (len(errors) == 0, errors)
+
+
 def fetch_debug(url: str):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
