@@ -69,6 +69,12 @@
 
 ---
 
+## T13 — Multi-category discovery: speakers
+
+- **Verify external identifiers before assuming the pattern holds.** The Coolblue URL for speakers (`draadloze-speakers/filter`) does not follow the Dutch-noun pattern of headphones (`hoofdtelefoons`) or earbuds (`oordopjes`). Assuming the pattern caused a wrong URL and an unnecessary `_CATEGORY_MAP` entry that had to be rolled back. For any new category, confirm the actual URL before writing code.
+
+---
+
 ## T12 — Multi-category discovery: earbuds
 
 - **Verify documented interfaces are actually wired up.** The docstring said the script accepted a `[category_url]` CLI arg, but `main()` never read `sys.argv`. Always trace the call path, not just the docstring.

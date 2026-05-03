@@ -21,6 +21,7 @@
 - Add comments only when they improve clarity
 - Before implementing any task involving a state change or status transition: map all consumers/readers of that state first, and surface threshold and policy questions (when does the transition trigger? how many times?) before writing any code — one short clarifying exchange is cheaper than a full rewrite
 - When a task involves side effects, do not start immediately after confirmation — pause and explicitly verify assumptions before proceeding
+- Before implementing a task that depends on an external URL, path, or identifier (e.g. a Coolblue category URL): verify the exact value before writing any code — do not assume it follows the same pattern as prior examples
 - Never modify `docs/spec.md` without explicit user confirmation; always show proposed changes and wait for approval
 
 
