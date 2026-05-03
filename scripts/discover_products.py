@@ -3,12 +3,14 @@ Weekly script to discover all unique Coolblue products, enrich them with product
 metadata from the product detail page and store them directly in PostgreSQL.
 
 Usage:
-    python scripts/discover_products.py [category]
+    python scripts/discover_products.py [category] [--limit N]
 
     category: headphones (default), earbuds, speakers, soundbars
+    --limit N: process only the first N products (dev/testing only)
 """
 
 import sys
+import argparse
 import time
 from pathlib import Path
 
@@ -121,9 +123,17 @@ def process_products(conn, products, fallback_category=None):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("category", nargs="?", default="headphones")
+    parser.add_argument("--limit", type=int, default=None)
+    args = parser.parse_args()
+
     overall_start = time.time()
-    category = sys.argv[1] if len(sys.argv) > 1 else "headphones"
-    products, fallback_category = discover_products(category)
+    products, fallback_category = discover_products(args.category)
+
+    if args.limit is not None:
+        print(f"[DEV] --limit {args.limit}: capping at {min(args.limit, len(products))} products")
+        products = products[: args.limit]
 
     conn = None
     conn = get_connection()

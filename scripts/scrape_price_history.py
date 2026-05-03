@@ -1,12 +1,15 @@
 """
-Daily script to store the prices and availability of all Coolblue products 
+Daily script to store the prices and availability of all Coolblue products
 from the product detail page in the price_history table in PostgreSQL.
 
 Usage:
-    python scripts/scrape_price_history.py
+    python scripts/scrape_price_history.py [--limit N]
+
+    --limit N: process only the first N products (dev/testing only)
 """
 
 import sys
+import argparse
 import time
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -214,16 +217,25 @@ def next_retry_time(now, next_attempt: int):
 # main
 # ----------------------------
 def main():
-    # Add jitter to avoid the 09:00 “spike”
-    jitter_seconds = random.uniform(0, 10 * 60)  # 0-10 minutes
-    print(f"[RUN] Start jitter sleeping {jitter_seconds:.0f}s")
-    time.sleep(jitter_seconds)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--limit", type=int, default=None)
+    args = parser.parse_args()
+
+    if args.limit is None:
+        # Add jitter to avoid the 09:00 “spike”
+        jitter_seconds = random.uniform(0, 10 * 60)  # 0-10 minutes
+        print(f"[RUN] Start jitter sleeping {jitter_seconds:.0f}s")
+        time.sleep(jitter_seconds)
 
     overall_start = time.time()
 
     start = time.time()
     products = get_products_to_scrape()
     print(f"Found {len(products)} products to scrape")
+
+    if args.limit is not None:
+        print(f"[DEV] --limit {args.limit}: capping at {min(args.limit, len(products))} products")
+        products = products[: args.limit]
     print(f"Product lookup took {time.time() - start:.1f} seconds")
 
     conn = get_connection()
