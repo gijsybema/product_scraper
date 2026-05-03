@@ -26,6 +26,7 @@ CATEGORY_URLS = {
     "headphones": "https://www.coolblue.nl/hoofdtelefoons/filter",
     "earbuds":    "https://www.coolblue.nl/oordopjes/filter",
     "speakers":   "https://www.coolblue.nl/draadloze-speakers/filter",
+    "soundbars":  "https://www.coolblue.nl/soundbars/filter",
 }
 
 

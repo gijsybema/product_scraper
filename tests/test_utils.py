@@ -35,6 +35,7 @@ def test_normalize_category_url_segments():
     assert normalize_category("hoofdtelefoons") == "headphones"   # /hoofdtelefoons/filter
     assert normalize_category("oordopjes") == "earbuds"           # /oordopjes/filter
     assert normalize_category("draadloze-speakers") == "speakers"  # /draadloze-speakers/filter
+    assert normalize_category("soundbars") == "soundbars"          # /soundbars/filter
 
 def test_normalize_category_unknown_returns_none():
     assert normalize_category("televisie") is None

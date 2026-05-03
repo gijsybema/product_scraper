@@ -190,7 +190,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T11b | Enforce `category` as required in `validate_product_details`; thread discovery URL category as fallback into `details` in `discover_products.py` so breadcrumb-failure products (e.g. Sony brand-path pages) are still inserted with a valid category rather than skipped | 6a |
 | ✅ | T12 | Multi-category discovery: earbuds | 6b |
 | ✅ | T13 | Multi-category discovery: speakers | 6c |
-| ⬜ | T14 | Multi-category discovery: soundbars | 6d |
+| ✅ | T14 | Multi-category discovery: soundbars | 6d |
 | ⬜ | T15 | Parser: description + specs for headphones | 7 |
 | ⬜ | T16 | Parser: description + specs for earbuds | 7 |
 | ⬜ | T17 | Parser: description + specs for speakers | 7 |
