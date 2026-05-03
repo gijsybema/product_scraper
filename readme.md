@@ -64,10 +64,40 @@ Set `DATABASE_URL` — this takes precedence over all `DB_*` vars. Add `TELEGRAM
 ## Running scripts
 
 ```bash
-python scripts/discover_products.py
+python scripts/discover_products.py            # defaults to headphones
+python scripts/discover_products.py earbuds
+python scripts/discover_products.py speakers
+python scripts/discover_products.py soundbars
 python scripts/scrape_price_history.py
 python scripts/send_alerts.py
 ```
+
+Both `discover_products.py` and `scrape_price_history.py` accept `--limit N` to process only the first N products — useful during development to test logic without running the full pipeline. Never pass `--limit` in Railway cron jobs.
+
+### Running a script manually against production
+
+Railway cron jobs run automatically, but occasionally you need to trigger a script once (e.g. to seed a new category).
+
+**Do not use `railway run`** — it injects the internal database hostname (`postgres.railway.internal`), which is unreachable from your local machine.
+
+Instead, connect directly using the public database URL:
+
+1. Open the [Railway dashboard](https://railway.app) → your project → Postgres service → **Variables** tab
+2. Copy the value of `DATABASE_PUBLIC_URL` (hostname looks like `roundhouse.proxy.rlwy.net`)
+3. Set it locally and run the script:
+
+**PowerShell:**
+```powershell
+$env:DATABASE_URL="postgresql://postgres:<password>@<public-host>:<port>/railway"
+python scripts/discover_products.py earbuds
+```
+
+**bash:**
+```bash
+DATABASE_URL="postgresql://postgres:<password>@<public-host>:<port>/railway" python scripts/discover_products.py earbuds
+```
+
+The script reads `DATABASE_URL` and connects over the public hostname. No Railway CLI needed.
 
 ## Project structure
 

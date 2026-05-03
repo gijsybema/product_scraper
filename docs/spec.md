@@ -24,6 +24,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 
 ### Deal Detection
 - A product is a deal if: current price is > €100 AND current price is > €25 below the 30-day price high
+- **Gap (T19b):** the €25 minimum is defined here but not yet enforced in `sql/views/deal_candidates.sql`
 - Rules apply identically across all four categories
 - No changes to deal detection logic unless multi-category support requires it
 
@@ -167,6 +168,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | Rewriting too much at once | Strict slice-by-slice workflow; no phase spans more than one concern |
 | Source terms / scraping legality | Document assumptions now; plan migration to official feed as future work |
 | Specs schema varies by category | Use JSONB for specs; document expected keys per category in README |
+| Scrape run time scales with product count | Current pacing (2–4s/product + batch pauses) gives ~60–80 min for 800 products — acceptable for a daily job; revisit if categories expand significantly or run time approaches 3–4 hours |
 
 ---
 
@@ -196,6 +198,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ⬜ | T17 | Parser: description + specs for speakers | 7 |
 | ⬜ | T18 | Parser: description + specs for soundbars | 7 |
 | ⬜ | T19 | Verify deal detection query across all four categories | 8 |
+| ⬜ | T19b | Enforce €25 minimum drop in `deal_candidates` view: add `AND (m.max_price_30d - cp.current_price) >= 25` to the WHERE clause | 8 |
 | ⬜ | T20 | Update Railway cron jobs; retire `retry_scrape_price_history.py` and replace hourly retry cron with a second daily run of `scrape_price_history.py` (e.g. 07:00 + 19:00); add `--all` mode to `discover_products.py` to run discovery for all categories in a single invocation and update Railway cron to use one job instead of four; optionally add single within-script retry for transient failures; remove `get_due_retry_run` and `clear_next_retry` from `src/db.py`. **Note:** once cron is updated for all categories, update the website copy to reflect that all audio categories are tracked — not just headphones (frontend task, outside current project scope). | 9 |
 | ⬜ | T21 | Update README and add-a-category guide | 10 |
 | ⬜ | T22 | Document scraping safety + source terms risk | 10 |

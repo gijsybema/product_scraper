@@ -82,3 +82,11 @@
 - **Substring normalization has order-dependent bugs.** `"hoofdtelefoon"` is a substring of `"in-ear-hoofdtelefoons"`, so an earbuds URL would have silently mapped to `headphones`. Tracing the normalization logic during planning caught this before any data was written.
 
 ---
+
+## Post T14 — Running discovery in production + spec housekeeping
+
+- **Verify SQL before stating behavioral claims.** Said "30 days of data needed before deals show" without reading `deal_candidates.sql` first — the view only requires one price drop. Read the source before asserting logic.
+- **Verify CLI flags before recommending them.** Gave `--category earbuds` confidently without checking the script; it's a positional argument. One grep would have prevented the correction.
+- **`railway run` injects its own env vars and overrides locals.** Setting `$env:DATABASE_URL` locally has no effect when using `railway run` — it overwrites with the internal hostname. The correct pattern for one-off production scripts: skip `railway run`, set `DATABASE_URL` to the public URL, and run Python directly.
+
+---
