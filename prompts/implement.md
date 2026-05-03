@@ -2,7 +2,17 @@
 
 Implement ONLY the following task or slice.
 
-Constraints:
+## Pre-implementation check
+
+Before writing any code, check:
+- Does this task involve a state change, status transition, or shared flag?
+  - If yes: confirm that all consumers/readers of that state have been mapped and that threshold/policy questions are settled. If not, raise them now and wait for answers before proceeding.
+- Does this task have non-obvious side effects (downstream views, async jobs, re-discovery logic, etc.)?
+  - If yes: state the assumptions explicitly and ask for confirmation before starting.
+
+Only proceed once these are confirmed.
+
+## Constraints
 - No unrelated changes
 - Follow existing patterns
 - Keep it simple

@@ -26,6 +26,8 @@ Propose updates to your project's `CLAUDE.md` and `docs/spec.md`:
 - A section describes something that no longer matches what was built
 - Something is factually incorrect
 
+⚠️ Never write to `docs/spec.md` before the user has confirmed the proposed changes in the review gate below.
+
 ## Review gate
 
 Do NOT write anything yet. Output the following for user review:
