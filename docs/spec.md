@@ -196,8 +196,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ⬜ | T17 | Parser: description + specs for speakers | 7 |
 | ⬜ | T18 | Parser: description + specs for soundbars | 7 |
 | ⬜ | T19 | Verify deal detection query across all four categories | 8 |
-| ⬜ | T20 | Update Railway cron jobs; retire `retry_scrape_price_history.py` and replace hourly retry cron with a second daily run of `scrape_price_history.py` (e.g. 07:00 + 19:00); optionally add single within-script retry for transient failures; remove `get_due_retry_run` and `clear_next_retry` from `src/db.py`. **Note:** once cron is updated for all categories, update the website copy to reflect that all audio categories are tracked — not just headphones (frontend task, outside current project scope). | 9 |
-| ⬜ | T20b | Add `--all` mode to `discover_products.py` to run discovery for all categories in a single invocation; update Railway cron to use one job instead of four | 9 |
+| ⬜ | T20 | Update Railway cron jobs; retire `retry_scrape_price_history.py` and replace hourly retry cron with a second daily run of `scrape_price_history.py` (e.g. 07:00 + 19:00); add `--all` mode to `discover_products.py` to run discovery for all categories in a single invocation and update Railway cron to use one job instead of four; optionally add single within-script retry for transient failures; remove `get_due_retry_run` and `clear_next_retry` from `src/db.py`. **Note:** once cron is updated for all categories, update the website copy to reflect that all audio categories are tracked — not just headphones (frontend task, outside current project scope). | 9 |
 | ⬜ | T21 | Update README and add-a-category guide | 10 |
 | ⬜ | T22 | Document scraping safety + source terms risk | 10 |
 | ⬜ | T23 | Edge-case parser tests + optional integration tests | 11 |
