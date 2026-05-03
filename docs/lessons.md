@@ -47,3 +47,12 @@
 - **Validation failures are a different failure mode from scrape failures.** Distinguishing `skipped` (quality issue, non-retriable) from `failed` (scrape error, retriable) keeps fail-ratio metrics honest and prevents wasted retry attempts. This distinction should be decided at plan time, not implementation time.
 
 ---
+
+## T10b — Deactivate products on repeated 404s; filter inactive products from deal views
+
+- **Trace downstream effects before designing any state change.** Setting `active = false` had non-obvious consumers: deal views showing broken URLs, re-discovery silently reactivating products. Walking through all readers of a flag before writing code is faster than finding them mid-implementation.
+- **Clarify the "when" and "how many times" before implementing.** The first implementation was thrown away because the threshold (1 vs 3 404s) and the deactivation policy weren't agreed upfront. For any task involving a status transition, surface those questions first — one short exchange is cheaper than a full rewrite.
+- **As a Claude user: slow it down when a task involves side effects.** Pushing back with "wait, what are the assumptions here?" before implementation begins is a legitimate and valuable move — it's not slowing things down, it's speeding up the net result.
+- **Throwaway test scripts are a smell.** `test_t10b.py` mutated live data, was fragile to crashes, and lived in the wrong place. The right question is always: what can a mock cover, and what genuinely requires a live DB? Usually the answer is "more than you think."
+
+---

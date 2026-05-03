@@ -61,7 +61,7 @@ def main():
         return
 
     retry_run_id = None
-    success, failed = 0, 0
+    success, failed, deactivated = 0, 0, 0
     status = "failed"
     try:
         # small jitter so retries don’t stack on the quarter-hour
@@ -75,10 +75,10 @@ def main():
         retry_run_id = create_scrape_run(conn, job_name="price_history_daily", total_products=len(products), retry_attempt=this_attempt)
         print(f"[RETRY] retry_run_id={retry_run_id}")
 
-        success, failed = process_products(conn, products)
+        success, failed, deactivated = process_products(conn, products)
 
-        total = success + failed
-        fail_ratio = (failed / total) if total > 0 else 1.0
+        total = success + failed + deactivated
+        fail_ratio = (failed / (success + failed)) if (success + failed) > 0 else 0.0
 
         next_retry_at = None
         status = "success"
@@ -90,7 +90,7 @@ def main():
             else:
                 status = "partial"
 
-        print(f"[RETRY] attempt={this_attempt} fail_ratio={fail_ratio:.1%} threshold={FAIL_RATIO_THRESHOLD:.0%} total={total} success={success} failed={failed} status={status}")
+        print(f"[RETRY] attempt={this_attempt} fail_ratio={fail_ratio:.1%} threshold={FAIL_RATIO_THRESHOLD:.0%} total={total} success={success} failed={failed} deactivated={deactivated} status={status}")
 
         # ✅ Run drop detection if fail ratio is below threshold
         if total > 0 and fail_ratio <= FAIL_RATIO_THRESHOLD:
@@ -131,14 +131,15 @@ def main():
     finally:
         duration = time.time() - overall_start
         print("=== RUN SUMMARY ===")
-        print(f"job       : price_history_retry")
-        print(f"run_id    : {retry_run_id}")
-        print(f"attempt   : {this_attempt}")
-        print(f"status    : {status}")
-        print(f"total     : {success + failed}")
-        print(f"success   : {success}")
-        print(f"failed    : {failed}")
-        print(f"duration  : {duration:.1f}s")
+        print(f"job         : price_history_retry")
+        print(f"run_id      : {retry_run_id}")
+        print(f"attempt     : {this_attempt}")
+        print(f"status      : {status}")
+        print(f"total       : {success + failed + deactivated}")
+        print(f"success     : {success}")
+        print(f"failed      : {failed}")
+        print(f"deactivated : {deactivated}")
+        print(f"duration    : {duration:.1f}s")
         print("===================")
         conn.close()
 

@@ -235,6 +235,44 @@ def finish_scrape_run(
         )
     conn.commit()
 
+CONSECUTIVE_404_THRESHOLD = 3
+
+def handle_product_404(conn, product_id: int) -> bool:
+    """
+    Increment consecutive_404s for a product.
+    Deactivates it (active=false) when the threshold is reached.
+    Returns True if the product was deactivated this call.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE products
+            SET consecutive_404s = consecutive_404s + 1,
+                active = CASE
+                    WHEN consecutive_404s + 1 >= %s THEN false
+                    ELSE active
+                END
+            WHERE id = %s
+            RETURNING consecutive_404s, active
+            """,
+            (CONSECUTIVE_404_THRESHOLD, product_id),
+        )
+        row = cur.fetchone()
+    if row is None:
+        return False
+    count, active = row
+    return not active and count >= CONSECUTIVE_404_THRESHOLD
+
+
+def reset_404_count(conn, product_id: int) -> None:
+    """Reset consecutive_404s to 0 after a successful scrape."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE products SET consecutive_404s = 0 WHERE id = %s AND consecutive_404s > 0",
+            (product_id,),
+        )
+
+
 def get_due_retry_run(conn, job_name: str) -> Optional[Dict[str, Any]]:
     """
     Returns the most recent run that has next_retry_at due, else None.

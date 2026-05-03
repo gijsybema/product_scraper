@@ -19,6 +19,10 @@
 - Consider edge cases, validation, error handling, security, privacy, and performance
 - Add tests only when directly relevant
 - Add comments only when they improve clarity
+- Before implementing any task involving a state change or status transition: map all consumers/readers of that state first, and surface threshold and policy questions (when does the transition trigger? how many times?) before writing any code — one short clarifying exchange is cheaper than a full rewrite
+- When a task involves side effects, do not start immediately after confirmation — pause and explicitly verify assumptions before proceeding
+- Never modify `docs/spec.md` without explicit user confirmation; always show proposed changes and wait for approval
+
 
 ## Output Style
 - Be concise and structured
@@ -90,3 +94,4 @@ If verification cannot be completed (no prod DB access, UI interaction required,
 - Tests are pure where possible — no live DB, no network calls
 - Idempotency is verified by inspecting SQL source strings, not by executing queries
 - Do not live-test scripts for print-only changes — a syntax check + code review is sufficient; reserve live runs for changes that affect DB writes or scrape logic
+- Never create one-off test scripts outside of `tests/` — write a proper unit test instead. Live DB verification belongs to the migration + manual run step, not a script.

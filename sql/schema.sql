@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS products (
   all_image_urls JSONB,
   created_at TIMESTAMP DEFAULT NOW(),
   active BOOLEAN NOT NULL DEFAULT TRUE,
+  consecutive_404s INT NOT NULL DEFAULT 0,
   UNIQUE (retailer_id, sku)
 );
 

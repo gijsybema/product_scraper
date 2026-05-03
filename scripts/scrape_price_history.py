@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import random
 import traceback
 from typing import Optional, Tuple
+import requests
 
 FAIL_RATIO_THRESHOLD = 0.20
 
@@ -20,15 +21,18 @@ FAIL_RATIO_THRESHOLD = 0.20
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.db import get_connection, upsert_price_history, get_products_to_scrape
-from src.db import create_scrape_run, finish_scrape_run
+from src.db import create_scrape_run, finish_scrape_run, handle_product_404, reset_404_count
 from src.coolblue_product_scraping import scrape_product_facts
 from src.utils import print_progress, validate_price_facts
 from scripts.detect_drops import run_detect_drops
 
-def process_single_product(conn, product_id: int, product_url: str, scraped_at) -> Tuple[bool, Optional[Exception]]:
+def process_single_product(conn, product_id: int, product_url: str, scraped_at) -> Tuple[bool, bool, Optional[Exception]]:
     """
     Scrape + upsert for a single product.
-    Retries transient failures and returns (success, error).
+    Returns (success, is_404, error).
+    - success=True: price history written
+    - is_404=True: product returned 404, should be deactivated (no retry)
+    - otherwise: transient failure, retried up to max_attempts
     """
     max_attempts = 2
     last_err: Optional[Exception] = None
@@ -44,7 +48,7 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
 
             valid, reasons = validate_price_facts({"price": price, "in_stock": in_stock})
             if not valid:
-                return False, ValueError(f"[VALIDATION] product_id={product_id} reasons={reasons}")
+                return False, False, ValueError(f"[VALIDATION] product_id={product_id} reasons={reasons}")
 
             upsert_price_history(
                 conn,
@@ -56,7 +60,20 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
                 review_count=review_count,
             )
 
-            return True, None  # ✅ success
+            return True, False, None  # ✅ success
+
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return False, True, e  # product gone — deactivate, don't retry
+            last_err = e
+            if attempt < max_attempts:
+                sleep_s = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+                print(
+                    f"🔁 Retry {attempt}/{max_attempts-1} "
+                    f"product_id={product_id} url={product_url} "
+                    f"err={type(e).__name__}: {e} sleeping {sleep_s:.1f}s"
+                )
+                time.sleep(sleep_s)
 
         except Exception as e:
             last_err = e
@@ -71,12 +88,13 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
                 time.sleep(sleep_s)
 
     # ❌ failed after retries
-    return False, last_err      
+    return False, False, last_err
 
 def process_products(conn, products):
     total = len(products)
     success = 0
     failed = 0
+    deactivated = 0
 
     total_iter_time = 0.0
     scraped_at = datetime.now().date()
@@ -106,7 +124,7 @@ def process_products(conn, products):
                 est_time_left=est_time_left,
             )
 
-            ok, err = process_single_product(
+            ok, is_404, err = process_single_product(
                 conn,
                 product_id=product_id,
                 product_url=product_url,
@@ -114,9 +132,32 @@ def process_products(conn, products):
             )
 
             if ok:
+                try:
+                    reset_404_count(conn, product_id)
+                except Exception as reset_err:
+                    print(f"[WARN] Failed to reset 404 count for product_id={product_id}: {reset_err}")
                 conn.commit()
                 total_iter_time += time.time() - iter_start
                 success += 1
+            elif is_404:
+                conn.rollback()
+                print("--------------------------------------------------")
+                print(f"🚫 PRODUCT NOT FOUND (404) product_id={product_id} url={product_url}")
+                try:
+                    newly_deactivated = handle_product_404(conn, product_id)
+                    conn.commit()
+                    if newly_deactivated:
+                        deactivated += 1
+                        print(f"   → deactivated after reaching threshold")
+                    else:
+                        print(f"   → 404 count incremented, not yet at threshold")
+                except Exception as deact_err:
+                    print(f"[WARN] Failed to update 404 count for product_id={product_id}: {deact_err}")
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+                print("--------------------------------------------------")
             else:
                 conn.rollback()
                 failed += 1
@@ -153,7 +194,7 @@ def process_products(conn, products):
             print(f"[PACE] Batch pause after {idx+1} products: sleeping {batch_sleep_s:.2f}s")
             time.sleep(batch_sleep_s)
 
-    return success, failed
+    return success, failed, deactivated
 
 # ----------------------------
 # retry logic
@@ -197,19 +238,20 @@ def main():
 
     success = 0
     failed = 0
+    deactivated = 0
     status = "success"
     next_retry_at = None
     last_error = None
 
     try:
-        success, failed = process_products(conn, products)
+        success, failed, deactivated = process_products(conn, products)
 
         total_elapsed = time.time() - overall_start
         print(f"Price history scraping completed in {total_elapsed:.1f} seconds")
-        print(f"Finished: {success} succeeded, {failed} failed")
+        print(f"Finished: {success} succeeded, {failed} failed, {deactivated} deactivated")
 
-        total = success + failed
-        fail_ratio = (failed / total) if total > 0 else 1.0
+        total = success + failed + deactivated
+        fail_ratio = (failed / (success + failed)) if (success + failed) > 0 else 0.0
 
         if failed > 0:
             if total > 0 and fail_ratio > FAIL_RATIO_THRESHOLD:
@@ -219,7 +261,7 @@ def main():
             else:
                 status = "partial"
 
-        print(f"[RUN] success={success} failed={failed} fail_ratio={fail_ratio:.1%} status={status}")
+        print(f"[RUN] success={success} failed={failed} deactivated={deactivated} fail_ratio={fail_ratio:.1%} status={status}")
         if next_retry_at:
             print(f"[RUN] next_retry_at={next_retry_at}")
 
@@ -269,13 +311,14 @@ def main():
 
         duration = time.time() - overall_start
         print("=== RUN SUMMARY ===")
-        print(f"job       : price_history_daily")
-        print(f"run_id    : {run_id}")
-        print(f"status    : {status}")
-        print(f"total     : {success + failed}")
-        print(f"success   : {success}")
-        print(f"failed    : {failed}")
-        print(f"duration  : {duration:.1f}s")
+        print(f"job         : price_history_daily")
+        print(f"run_id      : {run_id}")
+        print(f"status      : {status}")
+        print(f"total       : {success + failed + deactivated}")
+        print(f"success     : {success}")
+        print(f"failed      : {failed}")
+        print(f"deactivated : {deactivated}")
+        print(f"duration    : {duration:.1f}s")
         print("===================")
 
         try:

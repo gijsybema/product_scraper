@@ -77,6 +77,7 @@ FROM products p
 JOIN current_prices cp ON cp.product_id = p.id
 JOIN max_30d m ON m.product_id = p.id
 JOIN current_price_since cps ON cps.product_id = p.id
-WHERE cp.availability = TRUE
+WHERE p.active = TRUE
+  AND cp.availability = TRUE
   AND m.max_price_30d > cp.current_price
   AND cp.current_price >= 100;
