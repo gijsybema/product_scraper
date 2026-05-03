@@ -14,6 +14,7 @@ def test_normalize_category_exact_keys():
     assert normalize_category("koptelefoon") == "headphones"
     assert normalize_category("in-ear hoofdtelefoon") == "earbuds"
     assert normalize_category("oortelefoon") == "earbuds"
+    assert normalize_category("oordopjes") == "earbuds"
     assert normalize_category("earbud") == "earbuds"
     assert normalize_category("speaker") == "speakers"
     assert normalize_category("soundbar") == "soundbars"
@@ -28,6 +29,11 @@ def test_normalize_category_substring_match():
     assert normalize_category("draadloze in-ear hoofdtelefoon") == "earbuds"
     assert normalize_category("draadloze hoofdtelefoon") == "headphones"
     assert normalize_category("bluetooth speaker set") == "speakers"
+
+def test_normalize_category_url_segments():
+    # URL path segments used by discover_products.py as fallback_category
+    assert normalize_category("hoofdtelefoons") == "headphones"   # /hoofdtelefoons/filter
+    assert normalize_category("oordopjes") == "earbuds"           # /oordopjes/filter
 
 def test_normalize_category_unknown_returns_none():
     assert normalize_category("televisie") is None

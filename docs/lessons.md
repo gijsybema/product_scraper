@@ -68,3 +68,11 @@
 - **Derive implicit context from what the caller already knows.** The discovery script already knows the category URL — deriving `fallback_category` from it required no new input from the user and no extra network call. When a fallback is needed, check what the caller has before adding a new parameter or config value.
 
 ---
+
+## T12 — Multi-category discovery: earbuds
+
+- **Verify documented interfaces are actually wired up.** The docstring said the script accepted a `[category_url]` CLI arg, but `main()` never read `sys.argv`. Always trace the call path, not just the docstring.
+- **Pass the semantic value, not a derived one.** The original design passed a URL and re-derived the category from it. Passing the category name directly eliminated the URL-parsing step, the fallback warning, and a potential misclassification bug — all at once.
+- **Substring normalization has order-dependent bugs.** `"hoofdtelefoon"` is a substring of `"in-ear-hoofdtelefoons"`, so an earbuds URL would have silently mapped to `headphones`. Tracing the normalization logic during planning caught this before any data was written.
+
+---

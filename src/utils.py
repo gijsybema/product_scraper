@@ -12,6 +12,7 @@ _CATEGORY_MAP = {
     "koptelefoon": "headphones",
     "in-ear hoofdtelefoon": "earbuds",
     "oortelefoon": "earbuds",
+    "oordopjes": "earbuds",
     "earbud": "earbuds",
     "speaker": "speakers",
     "soundbar": "soundbars",

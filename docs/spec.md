@@ -188,7 +188,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T10b | Mark products inactive when price scrape returns 3 consecutive 404s; filter inactive products from deal views; log deactivations in run summary | 5 |
 | ✅ | T11 | Multi-category discovery: headphones (validate new schema end-to-end); wire slug generation into `upsert_product()` so every new product gets a slug on insert; re-run backfill after to catch any products added during weekly discovery runs; update zero-product warning in `discover_products.py` to be category-aware (current warning is a false positive if a category genuinely has no products) | 6a |
 | ✅ | T11b | Enforce `category` as required in `validate_product_details`; thread discovery URL category as fallback into `details` in `discover_products.py` so breadcrumb-failure products (e.g. Sony brand-path pages) are still inserted with a valid category rather than skipped | 6a |
-| ⬜ | T12 | Multi-category discovery: earbuds | 6b |
+| ✅ | T12 | Multi-category discovery: earbuds | 6b |
 | ⬜ | T13 | Multi-category discovery: speakers | 6c |
 | ⬜ | T14 | Multi-category discovery: soundbars | 6d |
 | ⬜ | T15 | Parser: description + specs for headphones | 7 |
@@ -197,6 +197,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ⬜ | T18 | Parser: description + specs for soundbars | 7 |
 | ⬜ | T19 | Verify deal detection query across all four categories | 8 |
 | ⬜ | T20 | Update Railway cron jobs; retire `retry_scrape_price_history.py` and replace hourly retry cron with a second daily run of `scrape_price_history.py` (e.g. 07:00 + 19:00); optionally add single within-script retry for transient failures; remove `get_due_retry_run` and `clear_next_retry` from `src/db.py` | 9 |
+| ⬜ | T20b | Add `--all` mode to `discover_products.py` to run discovery for all categories in a single invocation; update Railway cron to use one job instead of four | 9 |
 | ⬜ | T21 | Update README and add-a-category guide | 10 |
 | ⬜ | T22 | Document scraping safety + source terms risk | 10 |
 | ⬜ | T23 | Edge-case parser tests + optional integration tests | 11 |

@@ -3,13 +3,14 @@ Weekly script to discover all unique Coolblue products, enrich them with product
 metadata from the product detail page and store them directly in PostgreSQL.
 
 Usage:
-    python scripts/discover_products.py [category_url]
+    python scripts/discover_products.py [category]
+
+    category: headphones (default), earbuds, speakers, soundbars
 """
 
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlparse
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -17,21 +18,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.coolblue_discovery import get_all_coolblue_products
 from src.coolblue_product_scraping import scrape_product_details
 from src.db import get_connection, upsert_product, create_scrape_run, finish_scrape_run
-from src.utils import print_progress, validate_product_details, generate_slug, normalize_category
+from src.utils import print_progress, validate_product_details, generate_slug
+
+CATEGORY_URLS = {
+    "headphones": "https://www.coolblue.nl/hoofdtelefoons/filter",
+    "earbuds":    "https://www.coolblue.nl/oordopjes/filter",
+}
 
 
-def _derive_category_from_url(url: str):
-    segment = urlparse(url).path.strip("/").split("/")[0]
-    return normalize_category(segment)
+def _resolve_category_url(category: str) -> str:
+    if category not in CATEGORY_URLS:
+        known = ", ".join(CATEGORY_URLS)
+        raise ValueError(f"Unknown category '{category}'. Known: {known}")
+    return CATEGORY_URLS[category]
 
 
-def discover_products(category_url=None):
-    if category_url is None:
-        category_url = "https://www.coolblue.nl/hoofdtelefoons/filter"
-
-    fallback_category = _derive_category_from_url(category_url)
-    if fallback_category is None:
-        print(f"WARNING: could not derive category from URL '{category_url}' — category fallback disabled")
+def discover_products(category="headphones"):
+    category_url = _resolve_category_url(category)
+    fallback_category = category
 
     print(f"Discovering products from: {category_url}")
     print("This may take a while...")
@@ -117,7 +121,8 @@ def process_products(conn, products, fallback_category=None):
 
 def main():
     overall_start = time.time()
-    products, fallback_category = discover_products()
+    category = sys.argv[1] if len(sys.argv) > 1 else "headphones"
+    products, fallback_category = discover_products(category)
 
     conn = None
     conn = get_connection()
