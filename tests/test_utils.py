@@ -4,7 +4,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.utils import normalize_category, generate_slug
+from src.utils import normalize_category, generate_slug, validate_product_details
 
 
 # --- normalize_category ---
@@ -77,5 +77,56 @@ def test_generate_slug_whitespace_only_raises():
 def test_generate_slug_all_symbols_raises():
     with pytest.raises(ValueError):
         generate_slug("!!! ???", set())
+
+
+# --- validate_product_details ---
+
+_VALID_DETAILS = {
+    "name": "Sony WH-1000XM5",
+    "product_url": "https://www.coolblue.nl/product/123/sony.html",
+    "image_url": "https://images.coolblue.nl/img.jpg",
+    "category": "headphones",
+}
+
+def test_validate_product_details_valid():
+    ok, errors = validate_product_details(_VALID_DETAILS)
+    assert ok
+    assert errors == []
+
+def test_validate_product_details_category_none_is_invalid():
+    d = {**_VALID_DETAILS, "category": None}
+    ok, errors = validate_product_details(d)
+    assert not ok
+    assert any("category" in e for e in errors)
+
+def test_validate_product_details_category_missing_is_invalid():
+    d = {k: v for k, v in _VALID_DETAILS.items() if k != "category"}
+    ok, errors = validate_product_details(d)
+    assert not ok
+    assert any("category" in e for e in errors)
+
+def test_validate_product_details_category_invalid_value():
+    d = {**_VALID_DETAILS, "category": "televisie"}
+    ok, errors = validate_product_details(d)
+    assert not ok
+    assert any("category" in e for e in errors)
+
+def test_validate_product_details_category_valid_values():
+    for cat in ("headphones", "earbuds", "speakers", "soundbars"):
+        d = {**_VALID_DETAILS, "category": cat}
+        ok, _ = validate_product_details(d)
+        assert ok, f"Expected valid for category={cat!r}"
+
+def test_validate_product_details_missing_name():
+    d = {**_VALID_DETAILS, "name": ""}
+    ok, errors = validate_product_details(d)
+    assert not ok
+    assert any("name" in e for e in errors)
+
+def test_validate_product_details_invalid_product_url():
+    d = {**_VALID_DETAILS, "product_url": "not-a-url"}
+    ok, errors = validate_product_details(d)
+    assert not ok
+    assert any("product_url" in e for e in errors)
 
 

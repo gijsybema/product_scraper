@@ -56,3 +56,15 @@
 - **Throwaway test scripts are a smell.** `test_t10b.py` mutated live data, was fragile to crashes, and lived in the wrong place. The right question is always: what can a mock cover, and what genuinely requires a live DB? Usually the answer is "more than you think."
 
 ---
+
+## T11 — Wire slug generation into discovery; category-aware zero-product warning
+
+- **`COALESCE(products.slug, EXCLUDED.slug)` is the right default for backfilled columns.** It means: preserve the existing value if set, accept the new one only if the column is null. This made the backfill (T5) and the live discovery run compatible without any ordering constraint — run either first, the result is the same.
+
+---
+
+## T11b — Enforce category validation; thread discovery URL category as fallback
+
+- **Derive implicit context from what the caller already knows.** The discovery script already knows the category URL — deriving `fallback_category` from it required no new input from the user and no extra network call. When a fallback is needed, check what the caller has before adding a new parameter or config value.
+
+---

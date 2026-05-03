@@ -56,9 +56,10 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 product_url,
                 image_url,
                 all_image_urls,
+                slug,
                 active
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, true)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, true)
             ON CONFLICT (retailer_id, sku)
             DO UPDATE SET
                 name = EXCLUDED.name,
@@ -72,7 +73,8 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                     ELSE products.all_image_urls
                 END,
                 active = true,
-                brand = COALESCE(products.brand, EXCLUDED.brand);
+                brand = COALESCE(products.brand, EXCLUDED.brand),
+                slug = COALESCE(products.slug, EXCLUDED.slug);
             """,
             (
                 COOLBLUE_RETAILER_ID,
@@ -83,6 +85,7 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 product_url,
                 details.get("image_url"),
                 json.dumps(details.get("all_image_urls", [])),
+                details.get("slug"),
             ),
         )
 

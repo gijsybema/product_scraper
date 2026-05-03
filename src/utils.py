@@ -81,8 +81,8 @@ def validate_product_details(details: dict) -> tuple[bool, list[str]]:
         errors.append(f"invalid 'image_url': {image_url!r}")
 
     category = details.get("category")
-    if category is not None and category not in VALID_CATEGORIES:
-        errors.append(f"invalid 'category': {category!r}")
+    if not category or category not in VALID_CATEGORIES:
+        errors.append(f"missing or invalid 'category': {category!r}")
 
     return (len(errors) == 0, errors)
 

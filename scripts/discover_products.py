@@ -9,6 +9,7 @@ Usage:
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -16,12 +17,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.coolblue_discovery import get_all_coolblue_products
 from src.coolblue_product_scraping import scrape_product_details
 from src.db import get_connection, upsert_product, create_scrape_run, finish_scrape_run
-from src.utils import print_progress, validate_product_details
+from src.utils import print_progress, validate_product_details, generate_slug, normalize_category
+
+
+def _derive_category_from_url(url: str):
+    segment = urlparse(url).path.strip("/").split("/")[0]
+    return normalize_category(segment)
 
 
 def discover_products(category_url=None):
     if category_url is None:
         category_url = "https://www.coolblue.nl/hoofdtelefoons/filter"
+
+    fallback_category = _derive_category_from_url(category_url)
+    if fallback_category is None:
+        print(f"WARNING: could not derive category from URL '{category_url}' — category fallback disabled")
 
     print(f"Discovering products from: {category_url}")
     print("This may take a while...")
@@ -30,17 +40,28 @@ def discover_products(category_url=None):
     products = get_all_coolblue_products(category_url)
     elapsed = time.time() - start
 
+    if len(products) == 0:
+        print(f"WARNING: 0 products discovered from {category_url} — possible block or page structure change")
+
     print(f"Found {len(products)} product URLs")
     print(f"Product URL discovery took {elapsed:.1f} seconds")
 
-    return products
+    return products, fallback_category
 
-def process_products(conn, products):
+
+def _load_existing_slugs(conn) -> set:
+    with conn.cursor() as cur:
+        cur.execute("SELECT slug FROM products WHERE slug IS NOT NULL")
+        return {row[0] for row in cur.fetchall()}
+
+
+def process_products(conn, products, fallback_category=None):
     total = len(products)
     success = 0
     failed = 0
     skipped = 0
     total_iter_time = 0.0
+    existing_slugs = _load_existing_slugs(conn)
 
     for idx, product in enumerate(products):
         iter_start = time.time()
@@ -63,11 +84,19 @@ def process_products(conn, products):
 
             details = scrape_product_details(product_url)
 
+            if not details.get("category") and fallback_category:
+                print(f"[CATEGORY FALLBACK] sku={sku} category=None from page, using fallback '{fallback_category}'")
+                details["category"] = fallback_category
+
             valid, reasons = validate_product_details(details)
             if not valid:
                 skipped += 1
                 print(f"[VALIDATION SKIP] sku={sku} reasons={reasons}")
                 continue
+
+            slug = generate_slug(details["name"], existing_slugs)
+            existing_slugs.add(slug)
+            details["slug"] = slug
 
             upsert_product(
                 conn,
@@ -88,10 +117,7 @@ def process_products(conn, products):
 
 def main():
     overall_start = time.time()
-    products = discover_products()
-
-    if len(products) == 0:
-        print("WARNING: 0 products discovered — possible block or page structure change")
+    products, fallback_category = discover_products()
 
     conn = None
     conn = get_connection()
@@ -100,7 +126,7 @@ def main():
     status = "failed"
     try:
         run_id = create_scrape_run(conn, job_name="discover_products", total_products=len(products))
-        success, failed, skipped = process_products(conn, products)
+        success, failed, skipped = process_products(conn, products, fallback_category)
         conn.commit()
         print("COMMITTING TRANSACTION")
 
