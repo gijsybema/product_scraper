@@ -193,7 +193,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T12 | Multi-category discovery: earbuds | 6b |
 | ✅ | T13 | Multi-category discovery: speakers | 6c |
 | ✅ | T14 | Multi-category discovery: soundbars | 6d |
-| ⬜ | T15 | Parser: description + specs for headphones | 7 |
+| ✅ | T15 | Parser: description + specs for headphones | 7 |
 | ⬜ | T16 | Parser: description + specs for earbuds | 7 |
 | ⬜ | T17 | Parser: description + specs for speakers | 7 |
 | ⬜ | T18 | Parser: description + specs for soundbars | 7 |

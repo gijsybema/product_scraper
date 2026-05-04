@@ -83,6 +83,15 @@
 
 ---
 
+## T15 — Parser: description + specs for headphones
+
+- **DOM inspection is part of the plan, not a pre-plan nicety.** Fetching the live page and walking the DOM (10 minutes) produced concrete, stable selectors that made the implementation straightforward. Skipping this step would have produced wrong selectors discovered only at test time. For any Coolblue parser task: inspect first, then plan.
+- **Anchor on semantic identifiers, never on generated CSS class names.** Coolblue uses CSS-in-JS (`css-19mtnxi`, etc.) that changes between deploys. The stable handles are: `section#product-information`, `section#product-specifications`, `h3` text content, `svg[aria-label]`. Follow this rule for T16–T18.
+- **Build the dev tool on the first category, use it on the rest.** `tools/inspect_product_page.py` cost ~15 minutes in T15 but will cut the recon step for T16–T18 to seconds. Investing in a reusable inspection tool at the start of a repeated-category pattern is worth it.
+- **`pytest` at the root silently collected dead archive files.** This only surfaced because we ran the full suite during verify. A `pytest.ini` with `testpaths = tests` is basic project hygiene — add it as soon as a project has non-test directories with test-shaped filenames.
+
+---
+
 ## Post T14 — Running discovery in production + spec housekeeping
 
 - **Verify SQL before stating behavioral claims.** Said "30 days of data needed before deals show" without reading `deal_candidates.sql` first — the view only requires one price drop. Read the source before asserting logic.

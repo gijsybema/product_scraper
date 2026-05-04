@@ -57,9 +57,11 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 image_url,
                 all_image_urls,
                 slug,
+                description,
+                specs,
                 active
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
             ON CONFLICT (retailer_id, sku)
             DO UPDATE SET
                 name = EXCLUDED.name,
@@ -74,7 +76,9 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 END,
                 active = true,
                 brand = COALESCE(products.brand, EXCLUDED.brand),
-                slug = COALESCE(products.slug, EXCLUDED.slug);
+                slug = COALESCE(products.slug, EXCLUDED.slug),
+                description = COALESCE(EXCLUDED.description, products.description),
+                specs = COALESCE(EXCLUDED.specs, products.specs);
             """,
             (
                 COOLBLUE_RETAILER_ID,
@@ -86,6 +90,8 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 details.get("image_url"),
                 json.dumps(details.get("all_image_urls", [])),
                 details.get("slug"),
+                details.get("description"),
+                json.dumps(details.get("specs")) if details.get("specs") is not None else None,
             ),
         )
 

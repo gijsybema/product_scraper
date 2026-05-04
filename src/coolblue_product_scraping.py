@@ -281,6 +281,92 @@ def extract_product_category(html: str) -> str | None:
     return None
 
 # ----------------------------
+# Spec key mappings per category
+# ----------------------------
+
+# Maps Coolblue Dutch label → stored English key, per category.
+# Only these keys are extracted and stored in the specs JSONB column.
+_SPEC_KEYS: dict[str, dict[str, str]] = {
+    "headphones": {
+        "Type oorkussen": "ear_cup_type",
+        "Bluetooth": "bluetooth",
+        "Bluetooth-versie": "bluetooth_version",
+        "Noise cancelling": "noise_cancelling",
+        "Kwaliteit noise cancelling": "noise_cancelling_quality",
+        "Ingebouwde microfoon": "built_in_microphone",
+        "Gemiddelde accuduur": "battery_life",
+        "Geluidsweergave": "audio_rendering",
+        "Gewicht in gram": "weight_grams",
+        "Waterbestendig": "water_resistant",
+        "Kleur": "color",
+        "Materiaal": "material",
+        "Type stroomvoorziening": "power_type",
+        "Kabel los te koppelen": "detachable_cable",
+    },
+}
+
+
+def extract_product_description(html: str) -> str | None:
+    """
+    Extract the product description text from the 'Omschrijving' section
+    inside section#product-information.
+    Returns None if the section or heading is absent.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    sec = soup.find("section", id="product-information")
+    if not sec:
+        return None
+
+    omschrijving_div = None
+    for h3 in sec.find_all("h3"):
+        if "Omschrijving" in h3.get_text():
+            omschrijving_div = h3.parent
+            break
+
+    if omschrijving_div is None:
+        return None
+
+    collapse = omschrijving_div.find("div", id=lambda x: x and x.startswith("collapse-content-"))
+    if not collapse:
+        return None
+
+    text = collapse.get_text(separator=" ", strip=True)
+    return text or None
+
+
+def extract_product_specs(html: str, category: str) -> dict | None:
+    """
+    Extract category-specific specs from section#product-specifications.
+    Parses every <tr>: key from <th>, value from last <td> (text or SVG aria-label).
+    Returns only keys defined in _SPEC_KEYS for the given category.
+    Returns None if the specs section is absent; {} if category has no mapping yet.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    sec = soup.find("section", id="product-specifications")
+    if not sec:
+        return None
+
+    key_map = _SPEC_KEYS.get(category, {})
+
+    raw: dict[str, str] = {}
+    for tr in sec.find_all("tr"):
+        th = tr.find("th")
+        tds = tr.find_all("td")
+        if not th or len(tds) < 2:
+            continue
+        label = th.get_text(strip=True)
+        value_td = tds[-1]
+        svg = value_td.find("svg")
+        if svg and svg.get("aria-label"):
+            value = svg["aria-label"]
+        else:
+            value = value_td.get_text(strip=True)
+        raw[label] = value
+
+    return {eng_key: raw[nl_label] for nl_label, eng_key in key_map.items() if nl_label in raw}
+
+
+# ----------------------------
 # Public scraping functions
 # ----------------------------
 def scrape_product_details(url: str, timeout=(5,20)) -> dict:
@@ -308,6 +394,8 @@ def scrape_product_details(url: str, timeout=(5,20)) -> dict:
     )
 
     category = extract_product_category(html)
+    description = extract_product_description(html)
+    specs = extract_product_specs(html, category) if category else None
 
     return {
         "name": product.get("name"),
@@ -316,6 +404,8 @@ def scrape_product_details(url: str, timeout=(5,20)) -> dict:
         "image_url": image_url,
         "all_image_urls": all_image_urls,
         "category": category,
+        "description": description,
+        "specs": specs,
     }
 
 def scrape_product_facts(url: str, timeout=(5, 20)) -> dict:
