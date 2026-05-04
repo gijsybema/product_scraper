@@ -273,3 +273,100 @@ def test_extract_specs_earbuds_headphone_only_key_absent():
     result = extract_product_specs(html, "earbuds")
     assert "detachable_cable" not in result
     assert result == {"fully_wireless": "Ja"}
+
+
+# ---------------------------------------------------------------------------
+# extract_product_specs — speakers
+# ---------------------------------------------------------------------------
+
+def test_extract_specs_speakers_shared_keys():
+    html = _specs_html([
+        ("Kleur", "Zwart", False),
+        ("Bluetooth", "Ja", True),
+        ("Geluidsweergave", "Stereo", False),
+        ("Gemiddelde accuduur", "24 uur", False),
+    ])
+    result = extract_product_specs(html, "speakers")
+    assert result["color"] == "Zwart"
+    assert result["bluetooth"] == "Ja"
+    assert result["audio_rendering"] == "Stereo"
+    assert result["battery_life"] == "24 uur"
+
+
+def test_extract_specs_speakers_specific_keys():
+    html = _specs_html([
+        ("Type speaker", "Bluetooth speaker", False),
+        ("Formaat draadloze speaker", "Compact (10-20 cm)", False),
+        ("Gewicht", "1,31 kg", False),
+        ("Maximale accu/batterijduur", "24 uur", False),
+        ("IP-certificering", "IP67", False),
+        ("Wifi ingebouwd", "Ja", True),
+        ("Multiroom audio", "Ja", True),
+        ("Bediening via app", "Ja", True),
+        ("Waterdichtheid", "Waterdicht", False),
+        ("NFC", "Nee", True),
+        ("Radio", "Ja", True),
+        ("Afstandsbediening", "Nee", True),
+        ("Bediening via knoppen op apparaat", "Ja", True),
+    ])
+    result = extract_product_specs(html, "speakers")
+    assert result["speaker_type"] == "Bluetooth speaker"
+    assert result["speaker_size"] == "Compact (10-20 cm)"
+    assert result["weight"] == "1,31 kg"
+    assert result["battery_life_max"] == "24 uur"
+    assert result["ip_rating"] == "IP67"
+    assert result["wifi"] == "Ja"
+    assert result["multiroom"] == "Ja"
+    assert result["app_control"] == "Ja"
+    assert result["water_resistance"] == "Waterdicht"
+    assert result["nfc"] == "Nee"
+    assert result["radio"] == "Ja"
+    assert result["remote_control"] == "Nee"
+    assert result["physical_controls"] == "Ja"
+
+
+def test_extract_specs_speakers_all_18_keys():
+    rows = [
+        ("Type speaker", "Bluetooth speaker", False),
+        ("Formaat draadloze speaker", "Compact (10-20 cm)", False),
+        ("Gewicht", "1,31 kg", False),
+        ("Kleur", "Zwart", False),
+        ("Ingebouwde microfoon", "Ja", True),
+        ("Gemiddelde accuduur", "24 uur", False),
+        ("Maximale accu/batterijduur", "24 uur", False),
+        ("IP-certificering", "IP67", False),
+        ("Bluetooth", "Ja", True),
+        ("Wifi ingebouwd", "Ja", True),
+        ("Multiroom audio", "Ja", True),
+        ("Geluidsweergave", "Stereo", False),
+        ("Bediening via app", "Ja", True),
+        ("Waterdichtheid", "Waterdicht", False),
+        ("NFC", "Nee", True),
+        ("Radio", "Ja", True),
+        ("Afstandsbediening", "Nee", True),
+        ("Bediening via knoppen op apparaat", "Ja", True),
+    ]
+    result = extract_product_specs(html=_specs_html(rows), category="speakers")
+    assert len(result) == 18
+    assert result["speaker_type"] == "Bluetooth speaker"
+    assert result["battery_life_max"] == "24 uur"
+    assert result["physical_controls"] == "Ja"
+
+
+def test_extract_specs_speakers_weight_key_distinct_from_headphones():
+    # speakers use "Gewicht" -> "weight"; headphones use "Gewicht in gram" -> "weight_grams"
+    html = _specs_html([("Gewicht", "1,31 kg", False)])
+    result = extract_product_specs(html, "speakers")
+    assert result["weight"] == "1,31 kg"
+    assert "weight_grams" not in result
+
+
+def test_extract_specs_speakers_earbuds_only_key_absent():
+    # fully_wireless is earbuds-only — must not appear in speakers result
+    html = _specs_html([
+        ("Volledig draadloze oordopjes", "Ja", True),
+        ("Type speaker", "Bluetooth speaker", False),
+    ])
+    result = extract_product_specs(html, "speakers")
+    assert "fully_wireless" not in result
+    assert result == {"speaker_type": "Bluetooth speaker"}

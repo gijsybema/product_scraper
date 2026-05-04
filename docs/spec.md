@@ -195,7 +195,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T14 | Multi-category discovery: soundbars | 6d |
 | ✅ | T15 | Parser: description + specs for headphones | 7 |
 | ✅ | T16 | Parser: description + specs for earbuds | 7 |
-| ⬜ | T17 | Parser: description + specs for speakers | 7 |
+| ✅ | T17 | Parser: description + specs for speakers | 7 |
 | ⬜ | T18 | Parser: description + specs for soundbars | 7 |
 | ⬜ | T19 | Verify deal detection query across all four categories | 8 |
 | ⬜ | T19b | Enforce €25 minimum drop in `deal_candidates` view: add `AND (m.max_price_30d - cp.current_price) >= 25` to the WHERE clause | 8 |

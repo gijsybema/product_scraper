@@ -100,6 +100,15 @@
 
 ---
 
+## T17 — Parser: description + specs for speakers
+
+- **Plan review is the right place for cross-category design questions.** The label-alignment question (align `Gewicht` / `Gewicht in gram` or keep separate?) was resolved in one exchange before any code was written. Raising it at plan time cost 30 seconds; discovering it at test time would have cost a rewrite.
+- **Different Dutch labels → different English keys, even if semantically related.** `Waterdichtheid` (text: "Waterdicht") and `Waterbestendig` (bool: Ja/Nee) describe water resistance but have different shapes. Forcing a shared key would lose information. Let the JSONB column hold per-category variation naturally — unification is a frontend concern.
+- **The inspector tool continues to pay for itself.** T17 recon was one command, one clean output, full specs table in one pass. The encoding fix in T16 meant no issues on Windows. The investment in T15 has now cut recon time on every subsequent category.
+- **Adding keys during plan review is the correct workflow.** Two extra keys were caught in the plan review before implementation started — a 10-second change to a table. The same addition mid-implementation would have required re-reading the key map, re-counting, and updating test assertions.
+
+---
+
 ## Post T14 — Running discovery in production + spec housekeeping
 
 - **Verify SQL before stating behavioral claims.** Said "30 days of data needed before deals show" without reading `deal_candidates.sql` first — the view only requires one price drop. Read the source before asserting logic.

@@ -324,6 +324,26 @@ _SPEC_KEYS: dict[str, dict[str, str]] = {
         "IP-certificering": "ip_rating",
         "Multipoint pairing": "multipoint_pairing",
     },
+    "speakers": {
+        "Type speaker": "speaker_type",
+        "Formaat draadloze speaker": "speaker_size",
+        "Gewicht": "weight",
+        "Kleur": "color",
+        "Ingebouwde microfoon": "built_in_microphone",
+        "Gemiddelde accuduur": "battery_life",
+        "Maximale accu/batterijduur": "battery_life_max",
+        "IP-certificering": "ip_rating",
+        "Bluetooth": "bluetooth",
+        "Wifi ingebouwd": "wifi",
+        "Multiroom audio": "multiroom",
+        "Geluidsweergave": "audio_rendering",
+        "Bediening via app": "app_control",
+        "Waterdichtheid": "water_resistance",
+        "NFC": "nfc",
+        "Radio": "radio",
+        "Afstandsbediening": "remote_control",
+        "Bediening via knoppen op apparaat": "physical_controls",
+    },
 }
 
 
