@@ -303,6 +303,27 @@ _SPEC_KEYS: dict[str, dict[str, str]] = {
         "Type stroomvoorziening": "power_type",
         "Kabel los te koppelen": "detachable_cable",
     },
+    "earbuds": {
+        "Type oorkussen": "ear_cup_type",
+        "Bluetooth": "bluetooth",
+        "Bluetooth-versie": "bluetooth_version",
+        "Noise cancelling": "noise_cancelling",
+        "Kwaliteit noise cancelling": "noise_cancelling_quality",
+        "Ingebouwde microfoon": "built_in_microphone",
+        "Gemiddelde accuduur": "battery_life",
+        "Geluidsweergave": "audio_rendering",
+        "Gewicht in gram": "weight_grams",
+        "Waterbestendig": "water_resistant",
+        "Kleur": "color",
+        "Materiaal": "material",
+        "Type stroomvoorziening": "power_type",
+        "Volledig draadloze oordopjes": "fully_wireless",
+        "Oplaadcase": "charging_case",
+        "Accuduur case": "battery_life_case",
+        "Draadloos opladen": "wireless_charging",
+        "IP-certificering": "ip_rating",
+        "Multipoint pairing": "multipoint_pairing",
+    },
 }
 
 

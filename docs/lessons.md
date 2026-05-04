@@ -83,6 +83,14 @@
 
 ---
 
+## T16 — Parser: description + specs for earbuds
+
+- **A well-designed extension point pays off immediately.** `_SPEC_KEYS` as a plain dict meant T16 was one dict entry + tests — no structural changes, no new functions, no DB work. Investing in the right abstraction in T15 made T16 take 20 minutes instead of an hour.
+- **The inspector tool caught the encoding bug on first real use.** The `→` crash in `tools/inspect_product_page.py` would have blocked every future category's recon step. Finding and fixing it in T16 (the first time the tool was actually run end-to-end on Windows) is exactly the payoff of building the tool early.
+- **Category-specific key sets should be diffed against each other at review time.** Explicitly checking shared vs. earbuds-only vs. headphones-only keys in verify caught nothing wrong — but the habit of making the diff visible is worth keeping. For T17/T18 the diff will be larger.
+
+---
+
 ## T15 — Parser: description + specs for headphones
 
 - **DOM inspection is part of the plan, not a pre-plan nicety.** Fetching the live page and walking the DOM (10 minutes) produced concrete, stable selectors that made the implementation straightforward. Skipping this step would have produced wrong selectors discovered only at test time. For any Coolblue parser task: inspect first, then plan.

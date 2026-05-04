@@ -186,3 +186,90 @@ def test_extract_specs_irrelevant_rows_excluded():
     result = extract_product_specs(html, "headphones")
     assert "Artikelnummer" not in result
     assert result == {"ear_cup_type": "Over ear"}
+
+
+# ---------------------------------------------------------------------------
+# extract_product_specs — earbuds
+# ---------------------------------------------------------------------------
+
+def test_extract_specs_earbuds_shared_keys():
+    html = _specs_html([
+        ("Type oorkussen", "Earbud", False),
+        ("Bluetooth-versie", "5.3", False),
+        ("Gemiddelde accuduur", "7 uur", False),
+        ("Kleur", "Zwart", False),
+    ])
+    result = extract_product_specs(html, "earbuds")
+    assert result["ear_cup_type"] == "Earbud"
+    assert result["bluetooth_version"] == "5.3"
+    assert result["battery_life"] == "7 uur"
+    assert result["color"] == "Zwart"
+
+
+def test_extract_specs_earbuds_specific_keys():
+    html = _specs_html([
+        ("Volledig draadloze oordopjes", "Ja", True),
+        ("Oplaadcase", "Ja", True),
+        ("Accuduur case", "30 uur", False),
+        ("Draadloos opladen", "Ja", True),
+        ("IP-certificering", "IPX4", False),
+        ("Multipoint pairing", "Ja", True),
+    ])
+    result = extract_product_specs(html, "earbuds")
+    assert result["fully_wireless"] == "Ja"
+    assert result["charging_case"] == "Ja"
+    assert result["battery_life_case"] == "30 uur"
+    assert result["wireless_charging"] == "Ja"
+    assert result["ip_rating"] == "IPX4"
+    assert result["multipoint_pairing"] == "Ja"
+
+
+def test_extract_specs_earbuds_all_19_keys():
+    rows = [
+        ("Type oorkussen", "Earbud", False),
+        ("Bluetooth", "Ja", True),
+        ("Bluetooth-versie", "5.3", False),
+        ("Noise cancelling", "Nee", True),
+        ("Kwaliteit noise cancelling", "Gemiddeld", False),
+        ("Ingebouwde microfoon", "Ja", True),
+        ("Gemiddelde accuduur", "7 uur", False),
+        ("Geluidsweergave", "Stereo", False),
+        ("Gewicht in gram", "46 g", False),
+        ("Waterbestendig", "Ja", True),
+        ("Kleur", "Zwart", False),
+        ("Materiaal", "Kunststof", False),
+        ("Type stroomvoorziening", "Accu / batterij", False),
+        ("Volledig draadloze oordopjes", "Ja", True),
+        ("Oplaadcase", "Ja", True),
+        ("Accuduur case", "30 uur", False),
+        ("Draadloos opladen", "Ja", True),
+        ("IP-certificering", "IPX4", False),
+        ("Multipoint pairing", "Ja", True),
+    ]
+    result = extract_product_specs(html=_specs_html(rows), category="earbuds")
+    assert len(result) == 19
+    assert result["fully_wireless"] == "Ja"
+    assert result["ip_rating"] == "IPX4"
+    assert result["battery_life_case"] == "30 uur"
+
+
+def test_extract_specs_earbuds_no_noise_cancelling_quality_when_absent():
+    # Products without ANC won't have a quality row — key must be absent, not None
+    html = _specs_html([
+        ("Noise cancelling", "Nee", True),
+        ("Volledig draadloze oordopjes", "Ja", True),
+    ])
+    result = extract_product_specs(html, "earbuds")
+    assert result["noise_cancelling"] == "Nee"
+    assert "noise_cancelling_quality" not in result
+
+
+def test_extract_specs_earbuds_headphone_only_key_absent():
+    # detachable_cable is headphones-only — must not appear in earbuds result
+    html = _specs_html([
+        ("Kabel los te koppelen", "Ja", True),
+        ("Volledig draadloze oordopjes", "Ja", True),
+    ])
+    result = extract_product_specs(html, "earbuds")
+    assert "detachable_cable" not in result
+    assert result == {"fully_wireless": "Ja"}

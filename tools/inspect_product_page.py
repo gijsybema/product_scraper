@@ -16,6 +16,10 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
+# Ensure Unicode output works on Windows (cp1252 terminals reject → etc.)
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
