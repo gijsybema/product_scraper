@@ -100,6 +100,14 @@
 
 ---
 
+## T18 — Parser: description + specs for soundbars
+
+- **Bundle pages are identifiable from the inspector output — two `Artikelnummer` rows and duplicate Dutch labels are the tell.** When you see this pattern, the key mapping is still derivable from the first product's block, but the risk of silent spec mixing is real. Prefer single-product URLs for inspector recon; bundle URLs work but require manually scoping to the right product block.
+- **Add known limitations to the spec risks table at the moment of discovery, not later.** The bundle page limitation was written into the risks table in the same session it was found. If it had stayed in the chat, it would have been lost. The spec is the right place — documentation tasks (T21/T22) are for narrative, not for decisions already made.
+- **The plan review gate (propose key table → user adjusts → implement) consistently catches missing keys.** T15–T18 all had 2–5 user additions at plan review time. This is not incidental — the key table format makes it easy to scan and add. Always present the table before implementing S1; never skip straight to code after inspection.
+
+---
+
 ## T17 — Parser: description + specs for speakers
 
 - **Plan review is the right place for cross-category design questions.** The label-alignment question (align `Gewicht` / `Gewicht in gram` or keep separate?) was resolved in one exchange before any code was written. Raising it at plan time cost 30 seconds; discovering it at test time would have cost a rewrite.

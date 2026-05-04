@@ -370,3 +370,96 @@ def test_extract_specs_speakers_earbuds_only_key_absent():
     result = extract_product_specs(html, "speakers")
     assert "fully_wireless" not in result
     assert result == {"speaker_type": "Bluetooth speaker"}
+
+
+# ---------------------------------------------------------------------------
+# extract_product_specs — soundbars
+# ---------------------------------------------------------------------------
+
+def test_extract_specs_soundbars_shared_keys():
+    html = _specs_html([
+        ("Kleur", "Zwart", False),
+        ("Bluetooth", "Ja", True),
+        ("Geluidsweergave", "Surround", False),
+        ("Wifi ingebouwd", "Ja", True),
+    ])
+    result = extract_product_specs(html, "soundbars")
+    assert result["color"] == "Zwart"
+    assert result["bluetooth"] == "Ja"
+    assert result["audio_rendering"] == "Surround"
+    assert result["wifi"] == "Ja"
+
+
+def test_extract_specs_soundbars_specific_keys():
+    html = _specs_html([
+        ("Losse subwoofer", "Nee", True),
+        ("Aantal audio kanalen", "9", False),
+        ("Aantal subwooferkanalen", "1", False),
+        ("Surround sound", "Dolby Atmos", False),
+        ("Hi-res audio", "Ja", True),
+        ("HDMI-aansluiting", "Ja", True),
+        ("HDMI ARC (Audio Return Channel)", "Ja", True),
+        ("Speelt van netwerk", "Ja", True),
+        ("Spotify Connect", "Ja", True),
+        ("AirPlay", "Ja", True),
+        ("Google Cast", "Nee", True),
+        ("Compatibel met smartphone / apps", "Ja", True),
+        ("Smart home platform", "Amazon Alexa, Apple HomeKit", False),
+    ])
+    result = extract_product_specs(html, "soundbars")
+    assert result["separate_subwoofer"] == "Nee"
+    assert result["audio_channels"] == "9"
+    assert result["subwoofer_channels"] == "1"
+    assert result["surround_sound"] == "Dolby Atmos"
+    assert result["hi_res_audio"] == "Ja"
+    assert result["hdmi"] == "Ja"
+    assert result["hdmi_arc"] == "Ja"
+    assert result["plays_from_network"] == "Ja"
+    assert result["spotify_connect"] == "Ja"
+    assert result["airplay"] == "Ja"
+    assert result["google_cast"] == "Nee"
+    assert result["smartphone_compatible"] == "Ja"
+    assert result["smart_home_platform"] == "Amazon Alexa, Apple HomeKit"
+
+
+def test_extract_specs_soundbars_all_22_keys():
+    rows = [
+        ("Gewicht", "5,76 kg", False),
+        ("Kleur", "Zwart", False),
+        ("Losse subwoofer", "Nee", True),
+        ("Aantal audio kanalen", "9", False),
+        ("Aantal subwooferkanalen", "1", False),
+        ("Geluidsweergave", "Surround", False),
+        ("Surround sound", "Dolby Atmos", False),
+        ("Hi-res audio", "Ja", True),
+        ("HDMI-aansluiting", "Ja", True),
+        ("HDMI ARC (Audio Return Channel)", "Ja", True),
+        ("Bluetooth", "Ja", True),
+        ("Wifi ingebouwd", "Ja", True),
+        ("Speelt van netwerk", "Ja", True),
+        ("Multiroom audio", "Ja", True),
+        ("NFC", "Ja", True),
+        ("Radio", "Ja", True),
+        ("Spotify Connect", "Ja", True),
+        ("AirPlay", "Ja", True),
+        ("Google Cast", "Nee", True),
+        ("Compatibel met smartphone / apps", "Ja", True),
+        ("Smart home platform", "Amazon Alexa, Apple HomeKit", False),
+        ("Bediening via app", "Ja", True),
+    ]
+    result = extract_product_specs(html=_specs_html(rows), category="soundbars")
+    assert len(result) == 22
+    assert result["weight"] == "5,76 kg"
+    assert result["surround_sound"] == "Dolby Atmos"
+    assert result["smart_home_platform"] == "Amazon Alexa, Apple HomeKit"
+
+
+def test_extract_specs_soundbars_speaker_only_key_absent():
+    # speaker_type is speakers-only — must not appear in soundbars result
+    html = _specs_html([
+        ("Type speaker", "Bluetooth speaker", False),
+        ("Geluidsweergave", "Surround", False),
+    ])
+    result = extract_product_specs(html, "soundbars")
+    assert "speaker_type" not in result
+    assert result == {"audio_rendering": "Surround"}

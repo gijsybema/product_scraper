@@ -169,6 +169,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | Source terms / scraping legality | Document assumptions now; plan migration to official feed as future work |
 | Specs schema varies by category | Use JSONB for specs; document expected keys per category in README |
 | Scrape run time scales with product count | Current pacing (2–4s/product + batch pauses) gives ~60–80 min for 800 products — acceptable for a daily job; revisit if categories expand significantly or run time approaches 3–4 hours |
+| Bundle product pages expose specs for multiple products in one `section#product-specifications` | Bundle pages do not appear on category filter pages used by discovery, so this is low risk currently. If a bundle URL were scraped, `extract_product_specs` would silently mix specs from both products (last Dutch label occurrence wins). Fix if needed: scope parsing to the first `div[id^='tabs-panel-']` rather than the whole section. |
 
 ---
 
@@ -196,7 +197,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T15 | Parser: description + specs for headphones | 7 |
 | ✅ | T16 | Parser: description + specs for earbuds | 7 |
 | ✅ | T17 | Parser: description + specs for speakers | 7 |
-| ⬜ | T18 | Parser: description + specs for soundbars | 7 |
+| ✅ | T18 | Parser: description + specs for soundbars | 7 |
 | ⬜ | T19 | Verify deal detection query across all four categories | 8 |
 | ⬜ | T19b | Enforce €25 minimum drop in `deal_candidates` view: add `AND (m.max_price_30d - cp.current_price) >= 25` to the WHERE clause | 8 |
 | ⬜ | T20 | Update Railway cron jobs; retire `retry_scrape_price_history.py` and replace hourly retry cron with a second daily run of `scrape_price_history.py` (e.g. 07:00 + 19:00); add `--all` mode to `discover_products.py` to run discovery for all categories in a single invocation and update Railway cron to use one job instead of four; optionally add single within-script retry for transient failures; remove `get_due_retry_run` and `clear_next_retry` from `src/db.py`. **Note:** once cron is updated for all categories, update the website copy to reflect that all audio categories are tracked — not just headphones (frontend task, outside current project scope). | 9 |
