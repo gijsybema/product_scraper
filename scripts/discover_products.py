@@ -4,9 +4,11 @@ metadata from the product detail page and store them directly in PostgreSQL.
 
 Usage:
     python scripts/discover_products.py [category] [--limit N]
+    python scripts/discover_products.py --all [--limit N]
 
     category: headphones (default), earbuds, speakers, soundbars
-    --limit N: process only the first N products (dev/testing only)
+    --all:    run discovery for all categories in sequence
+    --limit N: process only the first N products per category (dev/testing only)
 """
 
 import sys
@@ -123,26 +125,22 @@ def process_products(conn, products, fallback_category=None):
     return success, failed, skipped
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("category", nargs="?", default="headphones")
-    parser.add_argument("--limit", type=int, default=None)
-    args = parser.parse_args()
-
-    overall_start = time.time()
-    products, fallback_category = discover_products(args.category)
-
-    if args.limit is not None:
-        print(f"[DEV] --limit {args.limit}: capping at {min(args.limit, len(products))} products")
-        products = products[: args.limit]
-
-    conn = None
-    conn = get_connection()
+def run_category(conn, category, limit=None):
+    """Run full discover + upsert flow for one category. Returns summary dict."""
+    start = time.time()
     run_id = None
     success, failed, skipped = 0, 0, 0
     status = "failed"
+    products = []
+
     try:
-        run_id = create_scrape_run(conn, job_name="discover_products", total_products=len(products))
+        products, fallback_category = discover_products(category)
+
+        if limit is not None:
+            print(f"[DEV] --limit {limit}: capping at {min(limit, len(products))} products")
+            products = products[:limit]
+
+        run_id = create_scrape_run(conn, job_name=f"discover_products_{category}", total_products=len(products))
         success, failed, skipped = process_products(conn, products, fallback_category)
         conn.commit()
         print("COMMITTING TRANSACTION")
@@ -153,18 +151,17 @@ def main():
 
     except Exception as e:
         conn.rollback()
-        print("ERROR during product discovery:", e)
+        print(f"ERROR during discovery for '{category}': {e}")
         if run_id is not None:
             try:
                 finish_scrape_run(conn, run_id=run_id, status="failed", success_count=success, failed_count=failed, last_error=str(e))
             except Exception as log_err:
                 print(f"WARNING: could not write failed run log: {log_err}")
-        raise
 
     finally:
-        duration = time.time() - overall_start
+        duration = time.time() - start
         print("=== RUN SUMMARY ===")
-        print(f"job       : discover_products")
+        print(f"job       : discover_products_{category}")
         print(f"run_id    : {run_id}")
         print(f"status    : {status}")
         print(f"total     : {len(products)}")
@@ -173,8 +170,39 @@ def main():
         print(f"skipped   : {skipped}")
         print(f"duration  : {duration:.1f}s")
         print("===================")
+
+    return {"category": category, "total": len(products), "success": success, "failed": failed, "skipped": skipped, "status": status}
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("category", nargs="?", default="headphones")
+    parser.add_argument("--all", action="store_true", dest="all_categories",
+                        help="Run discovery for all categories in sequence")
+    parser.add_argument("--limit", type=int, default=None)
+    args = parser.parse_args()
+
+    overall_start = time.time()
+    categories = list(CATEGORY_URLS.keys()) if args.all_categories else [args.category]
+
+    conn = None
+    conn = get_connection()
+    results = []
+    try:
+        for category in categories:
+            result = run_category(conn, category, limit=args.limit)
+            results.append(result)
+    finally:
         if conn:
             conn.close()
+
+    if args.all_categories:
+        total_duration = time.time() - overall_start
+        print("=== ALL CATEGORIES SUMMARY ===")
+        for r in results:
+            print(f"  {r['category']:<12} status={r['status']} total={r['total']} success={r['success']} failed={r['failed']} skipped={r['skipped']}")
+        print(f"  total duration : {total_duration:.1f}s")
+        print("==============================")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import psycopg2
 import os
 from datetime import date, datetime
 from psycopg2 import OperationalError
-from typing import Optional, Dict, Any
+from typing import Optional
 import json
 
 COOLBLUE_RETAILER_ID = 1  # adjust if needed
@@ -131,15 +131,29 @@ def upsert_price_history(conn, product_id: int, scraped_at: datetime, price: flo
         )
 
 
-def get_products_to_scrape():
+def get_products_to_scrape(missed_only: bool = False):
     """
-    Get all active products to scrape from the products table.
-    Returns a list of dicts with 'product_id' and 'product_url'.
+    Get active products to scrape.
+    missed_only=True: only products with no price_history row for today (recovery run).
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, product_url FROM products WHERE active = true")
+            if missed_only:
+                cur.execute(
+                    """
+                    SELECT p.id, p.product_url
+                    FROM products p
+                    WHERE p.active = true
+                      AND NOT EXISTS (
+                          SELECT 1 FROM price_history ph
+                          WHERE ph.product_id = p.id
+                            AND ph.scraped_at = CURRENT_DATE
+                      )
+                    """
+                )
+            else:
+                cur.execute("SELECT id, product_url FROM products WHERE active = true")
             products = cur.fetchall()
         return [{"product_id": product[0], "product_url": product[1]} for product in products]
     finally:
@@ -224,7 +238,6 @@ def finish_scrape_run(
     success_count: int,
     failed_count: int,
     blocked_count: int = 0,
-    next_retry_at: Optional[datetime] = None,
     last_error: Optional[str] = None,
 ) -> None:
     with conn.cursor() as cur:
@@ -236,14 +249,16 @@ def finish_scrape_run(
                 success_count = %s,
                 failed_count = %s,
                 blocked_count = %s,
-                next_retry_at = %s,
                 last_error = %s
             WHERE id = %s
             """,
-            (status, success_count, failed_count, blocked_count, next_retry_at, last_error, run_id),
+            (status, success_count, failed_count, blocked_count, last_error, run_id),
         )
     conn.commit()
 
+# With two daily runs (morning + 12:00 recovery), a product that 404s in both
+# runs on the same day accumulates 2 hits, so deactivation can occur within
+# 2 calendar days instead of 3.
 CONSECUTIVE_404_THRESHOLD = 3
 
 def handle_product_404(conn, product_id: int) -> bool:
@@ -282,38 +297,3 @@ def reset_404_count(conn, product_id: int) -> None:
         )
 
 
-def get_due_retry_run(conn, job_name: str) -> Optional[Dict[str, Any]]:
-    """
-    Returns the most recent run that has next_retry_at due, else None.
-    """
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, retry_attempt
-            FROM scrape_runs
-            WHERE job_name = %s
-            AND next_retry_at IS NOT NULL
-            AND next_retry_at <= NOW()
-            AND status IN ('failed','blocked','partial')
-            AND DATE(started_at) = DATE(NOW())   -- 👈 same-day guard
-            AND finished_at IS NOT NULL
-            ORDER BY next_retry_at ASC
-            LIMIT 1
-            """,
-            (job_name,),
-        )
-        row = cur.fetchone()
-        if not row:
-            return None
-        return {
-            "id": row[0],
-            "retry_attempt": row[1],
-        }
-
-def clear_next_retry(conn, run_id: int) -> None:
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE scrape_runs SET next_retry_at = NULL WHERE id = %s",
-            (run_id,),
-        )
-    conn.commit()

@@ -12,7 +12,7 @@ import sys
 import argparse
 import time
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 import random
 import traceback
 from typing import Optional, Tuple
@@ -153,8 +153,10 @@ def process_products(conn, products):
                         deactivated += 1
                         print(f"   → deactivated after reaching threshold")
                     else:
+                        failed += 1
                         print(f"   → 404 count incremented, not yet at threshold")
                 except Exception as deact_err:
+                    failed += 1
                     print(f"[WARN] Failed to update 404 count for product_id={product_id}: {deact_err}")
                     try:
                         conn.rollback()
@@ -200,37 +202,26 @@ def process_products(conn, products):
     return success, failed, deactivated
 
 # ----------------------------
-# retry logic
-# ----------------------------
-RETRY_DELAYS_HOURS = [1, 2, 4, 4]  # attempt 1..4
-
-def next_retry_time(now, next_attempt: int):
-    """
-    next_attempt: 1..4 -> schedule based on RETRY_DELAYS_HOURS
-    returns datetime or None if no more retries
-    """
-    if 1 <= next_attempt <= len(RETRY_DELAYS_HOURS):
-        return now + timedelta(hours=RETRY_DELAYS_HOURS[next_attempt - 1])
-    return None
-
-# ----------------------------
 # main
 # ----------------------------
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--missed-only", action="store_true", dest="missed_only",
+                        help="Only scrape products with no price_history row for today (recovery run)")
     args = parser.parse_args()
 
     if args.limit is None:
-        # Add jitter to avoid the 09:00 “spike”
+        # Add jitter to avoid the 09:00 / 12:00 spike
         jitter_seconds = random.uniform(0, 10 * 60)  # 0-10 minutes
         print(f"[RUN] Start jitter sleeping {jitter_seconds:.0f}s")
         time.sleep(jitter_seconds)
 
     overall_start = time.time()
+    job_name = "price_history_recovery" if args.missed_only else "price_history_daily"
 
     start = time.time()
-    products = get_products_to_scrape()
+    products = get_products_to_scrape(missed_only=args.missed_only)
     print(f"Found {len(products)} products to scrape")
 
     if args.limit is not None:
@@ -242,7 +233,7 @@ def main():
     run_id = None
     run_id = create_scrape_run(
         conn,
-        job_name="price_history_daily",
+        job_name=job_name,
         total_products=len(products),
         retry_attempt=0,
     )
@@ -252,7 +243,6 @@ def main():
     failed = 0
     deactivated = 0
     status = "success"
-    next_retry_at = None
     last_error = None
 
     try:
@@ -269,13 +259,10 @@ def main():
             if total > 0 and fail_ratio > FAIL_RATIO_THRESHOLD:
                 print("⚠️  High failure ratio — possible temporary block")
                 status = "failed"
-                next_retry_at = next_retry_time(datetime.now(), next_attempt=1)
             else:
                 status = "partial"
 
         print(f"[RUN] success={success} failed={failed} deactivated={deactivated} fail_ratio={fail_ratio:.1%} status={status}")
-        if next_retry_at:
-            print(f"[RUN] next_retry_at={next_retry_at}")
 
         # Run drop detection if fail ratio is below threshold
         if total > 0 and fail_ratio <= FAIL_RATIO_THRESHOLD:
@@ -300,10 +287,6 @@ def main():
         print(traceback.format_exc())
 
         status = "failed"
-        next_retry_at = next_retry_time(datetime.now(), next_attempt=1)
-
-        # Optional: re-raise if you want Railway to show it as failed
-        # raise
 
     finally:
         try:
@@ -313,8 +296,7 @@ def main():
                 status=status,
                 success_count=success,
                 failed_count=failed,
-                blocked_count=0,
-                next_retry_at=next_retry_at,
+                blocked_count=deactivated,
                 last_error=last_error,
             )
         except Exception as e:
@@ -323,7 +305,7 @@ def main():
 
         duration = time.time() - overall_start
         print("=== RUN SUMMARY ===")
-        print(f"job         : price_history_daily")
+        print(f"job         : {job_name}")
         print(f"run_id      : {run_id}")
         print(f"status      : {status}")
         print(f"total       : {success + failed + deactivated}")
@@ -337,9 +319,6 @@ def main():
             conn.close()
         except Exception:
             pass
-
-    if next_retry_at:
-        print(f"[RUN] Scheduled retry at {next_retry_at}")
 
 if __name__ == "__main__":
     main()
