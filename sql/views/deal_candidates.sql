@@ -80,4 +80,5 @@ JOIN current_price_since cps ON cps.product_id = p.id
 WHERE p.active = TRUE
   AND cp.availability = TRUE
   AND m.max_price_30d > cp.current_price
-  AND cp.current_price >= 100;
+  AND cp.current_price >= 100
+  AND (m.max_price_30d - cp.current_price) >= 25;
