@@ -4,8 +4,11 @@ from the product detail page in the price_history table in PostgreSQL.
 
 Usage:
     python scripts/scrape_price_history.py [--limit N]
+    python scripts/scrape_price_history.py --missed-only [--limit N]
 
-    --limit N: process only the first N products (dev/testing only)
+    --missed-only: recovery run — only scrapes products with no price_history
+                   row for today (job_name: price_history_recovery)
+    --limit N:     process only the first N products (dev/testing only)
 """
 
 import sys
