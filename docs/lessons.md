@@ -117,6 +117,15 @@
 
 ---
 
+## T20 — Cron/Railway update; retire retry script; add --all and --missed-only modes
+
+- **Counter exhaustiveness needs a check, not trust.** The `total_products != success + failed + blocked` mismatch went unnoticed because 404-below-threshold products fell through all three counters silently. When building mutually exclusive outcome buckets, add an integrity assertion at the write site — don't rely on "the math looks right" in review.
+- **Job name scope matters for observability.** Using a single `"discover_products"` job name would have made per-category audit trails in `scrape_runs` unreadable. Naming jobs by their specific scope (`discover_products_{category}`) is worth thinking about upfront, not retrofitting.
+- **Recovery-mode semantics need an explicit decision before coding.** Whether a recovery run should overwrite existing prices or only fill gaps is easy to get wrong silently. Surfacing that question before writing any code saved a rewrite.
+- **Update the docstring in the same edit as the flag.** Adding `--missed-only` without updating the module docstring caused a separate fix commit. Avoidable with a single habit.
+
+---
+
 ## Post T14 — Running discovery in production + spec housekeeping
 
 - **Verify SQL before stating behavioral claims.** Said "30 days of data needed before deals show" without reading `deal_candidates.sql` first — the view only requires one price drop. Read the source before asserting logic.

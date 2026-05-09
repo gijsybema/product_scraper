@@ -92,6 +92,10 @@ If verification cannot be completed (no prod DB access, UI interaction required,
 - Validation failures are deterministic — do not retry them. In a retry loop, call validation after scraping and return early before the retry logic. Use `return False, ValueError(...)` to signal a validation failure to the caller.
 - In scripts that track both `failed` and `skipped` counts: skipped = validation/quality issue (non-retriable, no DB write attempted); failed = scrape or DB error (retriable). Keep these counters separate.
 
+## Commit Rules
+- Never commit changes without explicit user approval — show what changed and wait for confirmation before running `git commit`
+- When adding a new CLI flag or argument to a script, update the module docstring in the same edit
+
 ## Dev Shortcuts
 - Both `discover_products.py` and `scrape_price_history.py` accept a `--limit N` flag to process only the first N products — use this during development to test logic without running the full pipeline. Never pass `--limit` in Railway cron jobs.
 
