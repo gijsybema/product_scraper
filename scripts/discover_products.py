@@ -91,6 +91,7 @@ def process_products(conn, products, fallback_category=None):
                 avg_time=avg_time,
                 est_time_left=est_time_left,
             )
+            print(f"  url : {product_url.split('coolblue.nl')[-1]}")
 
             details = scrape_product_details(product_url)
 

@@ -280,7 +280,7 @@ def main():
             print(f"[DROPS] Skip detect_drops (fail_ratio={fail_ratio:.1%} > {FAIL_RATIO_THRESHOLD:.0%})")
 
     except Exception as e:
-        # If the whole run crashes, mark as failed and schedule retry
+        # If the whole run crashes, mark as failed
         try:
             conn.rollback()
         except Exception:
@@ -317,6 +317,28 @@ def main():
         print(f"deactivated : {deactivated}")
         print(f"duration    : {duration:.1f}s")
         print("===================")
+
+        if not args.missed_only:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT COUNT(*) FROM products p
+                        WHERE p.active = true
+                          AND NOT EXISTS (
+                              SELECT 1 FROM price_history ph
+                              WHERE ph.product_id = p.id
+                                AND ph.scraped_at = CURRENT_DATE
+                          )
+                        """
+                    )
+                    missed = cur.fetchone()[0]
+                if missed > 0:
+                    print(f"[RECOVERY] {missed} products have no price_history row today — recovery run will pick these up")
+                else:
+                    print("[RECOVERY] All products scraped — no recovery run needed")
+            except Exception as e:
+                print(f"[RECOVERY] Could not count missed products: {e}")
 
         try:
             conn.close()

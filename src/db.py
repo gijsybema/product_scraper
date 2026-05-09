@@ -215,7 +215,7 @@ def insert_daily_price_drops(conn) -> int:
         return cur.rowcount
 
 # ----------------------------
-# retry logic
+# scrape run logging
 # ----------------------------
 def create_scrape_run(conn, job_name: str, total_products: int, retry_attempt: int=0) -> int:
     with conn.cursor() as cur:
