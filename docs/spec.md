@@ -204,7 +204,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T20c | Add count integrity check to `sql/db_healthchecks.sql`: query `scrape_runs` to verify `total_products = success_count + failed_count + blocked_count` and flag any rows where they don't match | 9 |
 | ✅ | T20b | Stop crawling category pages early when `--limit N` is set: pass the limit into `get_all_coolblue_products` so it stops after fetching `ceil(N / products_per_page)` pages instead of crawling all pages first | 9 |
 | ✅ | T21 | Update README and add-a-category guide | 10 |
-| ⬜ | T22 | Document scraping safety + source terms risk | 10 |
+| ✅ | T22 | Document scraping safety + source terms risk | 10 |
 | ⬜ | T23 | Edge-case parser tests + optional integration tests; investigate ~10% of products with null description/specs after production discovery pass (likely non-standard page structure or inactive products) | 11 |
 | ⬜ | T24 | Cleanup of repo | 11 |
 
