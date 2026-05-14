@@ -1,6 +1,6 @@
-# Coolblue Headphones Price Tracker
+# Coolblue Audio Price Tracker
 
-Automated price tracking pipeline for headphones on [Coolblue](https://www.coolblue.nl/). Discovers products weekly, scrapes prices daily, detects drops, and sends Telegram alerts.
+Automated price tracking pipeline for audio products on [Coolblue](https://www.coolblue.nl/). Tracks headphones, earbuds, speakers, and soundbars. Discovers products weekly, scrapes prices daily, detects drops, and sends Telegram alerts.
 
 ## How it works
 
@@ -8,18 +8,21 @@ Automated price tracking pipeline for headphones on [Coolblue](https://www.coolb
 discover_products  (weekly)
     → crawl category pages → scrape product detail pages → upsert to products table
 
-scrape_price_history  (daily)
+scrape_price_history  (daily × 2)
     → scrape price + availability per product → upsert to price_history
     → detect_drops runs inline
     → send_alerts sends qualifying drops via Telegram
+
+scrape_price_history --missed-only  (daily recovery run)
+    → scrapes only products with no price_history row for today
 ```
 
 ## Scripts
 
 | Script | Schedule | What it does |
 |---|---|---|
-| `scripts/discover_products.py` | Weekly | Crawls Coolblue category pages, enriches each product with detail page metadata, upserts to `products` |
-| `scripts/scrape_price_history.py` | Daily | Scrapes price + availability for all active products, upserts to `price_history`, runs drop detection inline |
+| `scripts/discover_products.py` | Weekly | Crawls Coolblue category pages, enriches each product with detail page metadata, upserts to `products`. Use `--all` to run all categories in one invocation. |
+| `scripts/scrape_price_history.py` | Daily (×2) | Scrapes price + availability for all active products, upserts to `price_history`, runs drop detection inline. Use `--missed-only` for the recovery run. |
 | `scripts/detect_drops.py` | Inline (daily run) | Compares today vs. previous price, inserts qualifying drops to `price_drops` |
 | `scripts/send_alerts.py` | After daily run | Sends unsent drops (≥5% drop, ≥€150) as Telegram messages |
 
@@ -64,11 +67,15 @@ Set `DATABASE_URL` — this takes precedence over all `DB_*` vars. Add `TELEGRAM
 ## Running scripts
 
 ```bash
-python scripts/discover_products.py            # defaults to headphones
-python scripts/discover_products.py earbuds
-python scripts/discover_products.py speakers
-python scripts/discover_products.py soundbars
-python scripts/scrape_price_history.py
+# Discovery
+python scripts/discover_products.py --all          # all categories (production)
+python scripts/discover_products.py headphones     # single category
+
+# Price scraping
+python scripts/scrape_price_history.py             # full daily run
+python scripts/scrape_price_history.py --missed-only  # recovery: missed products only
+
+# Alerts
 python scripts/send_alerts.py
 ```
 
@@ -89,15 +96,63 @@ Instead, connect directly using the public database URL:
 **PowerShell:**
 ```powershell
 $env:DATABASE_URL="postgresql://postgres:<password>@<public-host>:<port>/railway"
-python scripts/discover_products.py earbuds
+python scripts/discover_products.py --all
 ```
 
 **bash:**
 ```bash
-DATABASE_URL="postgresql://postgres:<password>@<public-host>:<port>/railway" python scripts/discover_products.py earbuds
+DATABASE_URL="postgresql://postgres:<password>@<public-host>:<port>/railway" python scripts/discover_products.py --all
 ```
 
 The script reads `DATABASE_URL` and connects over the public hostname. No Railway CLI needed.
+
+## Adding a new category
+
+1. **Verify the Coolblue category URL** — do not assume it follows the same pattern as existing ones. Open the category filter page in a browser and copy the exact URL (e.g. `https://www.coolblue.nl/draadloze-speakers/filter`).
+
+2. **Inspect a product page** to map spec keys:
+   ```bash
+   python tools/inspect_product_page.py <product-url>
+   ```
+   This prints all spec labels and values. Pick the ones worth storing.
+
+3. **Add the category URL** to `CATEGORY_URLS` in `scripts/discover_products.py`:
+   ```python
+   "my-category": "https://www.coolblue.nl/<slug>/filter",
+   ```
+
+4. **Add a `_SPEC_KEYS` entry** in `src/coolblue_product_scraping.py` mapping Dutch spec labels to English storage keys. Follow the existing pattern for headphones/earbuds/speakers/soundbars.
+
+5. **Run discovery locally with `--limit`** to verify parsing and DB writes:
+   ```bash
+   python scripts/discover_products.py my-category --limit 5
+   ```
+
+6. **Railway cron** — if using `--all` (current setup), no cron change is needed. The new category is picked up automatically.
+
+## Scraping safety & legal risk
+
+### Safety measures in place
+
+- **Request pacing** — 2.5–5s randomised sleep between category page requests; product detail pages are fetched sequentially with the same jitter
+- **Timeouts** — 5s connect / 20s read on all requests; prevents a hung connection from stalling a run
+- **Retry with backoff** — 429 and 5xx responses trigger exponential backoff retries; the scraper backs off rather than hammering on errors
+- **Daily cadence** — scraping runs once (plus one recovery pass) per day, not continuously
+- **Page cap** — category crawler stops after 50 pages maximum, preventing runaway pagination
+
+### Source terms risk
+
+The scraper uses a browser-like User-Agent and does not check `robots.txt`. Coolblue's [Terms of Service](https://www.coolblue.nl/c/algemene-voorwaarden.html) were reviewed — no explicit prohibition on scraping was found. Current assumptions:
+
+- Usage is currently personal and non-commercial
+- Scraping is low-volume and polite enough not to constitute a denial-of-service risk
+- Data is not redistributed or sold
+
+**Intended future use:** affiliate marketing (commercial). Before going commercial, the goal is to migrate to Coolblue's official product feed, which would remove the scraping dependency entirely.
+
+### Future migration path
+
+Business logic (deal detection, DB writes, alerts) is fully decoupled from scraping. If Coolblue provides an official product feed or affiliate API, replacing the scraper requires changing only `src/coolblue_discovery.py` and `src/coolblue_product_scraping.py` — no changes to deal detection, validation, or the DB schema.
 
 ## Project structure
 
@@ -114,9 +169,9 @@ scripts/
   scrape_price_history.py
   detect_drops.py
   send_alerts.py
-  retry_scrape_price_history.py
-  check_category_coverage.py
-  backfill_category_slug.py
+
+tools/
+  inspect_product_page.py          # recon tool: prints specs/description for a product URL
 
 sql/
   schema.sql                       # authoritative DDL
