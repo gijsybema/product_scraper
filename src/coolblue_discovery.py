@@ -203,10 +203,13 @@ def get_products_from_category_page(session: requests.Session, url: str, timeout
     return last_products  # still empty
 
 
-def get_all_coolblue_products(base_category_url: str, max_pages=50, timeout=20):
+def get_all_coolblue_products(base_category_url: str, max_pages=50, timeout=20, max_products: Optional[int] = None):
     """
     Pagination via ?pagina=1..N (your preferred method),
     stop when a page adds 0 NEW products.
+
+    max_products: stop fetching pages once this many products have been collected
+                  (dev/testing only — avoids crawling all pages when --limit N is set).
     """
     all_products = []
     seen_urls = set()
@@ -214,6 +217,10 @@ def get_all_coolblue_products(base_category_url: str, max_pages=50, timeout=20):
 
     with requests.Session() as session:
         for page in range(1, max_pages + 1):
+            if max_products is not None and len(all_products) >= max_products:
+                print(f"[DEV] max_products={max_products} reached after page {page - 1}, stopping early.")
+                break
+
             polite_sleep(2.5, 5.0)  # between requests
 
             url = f"{base_category_url}?pagina={page}"

@@ -39,7 +39,7 @@ def _resolve_category_url(category: str) -> str:
     return CATEGORY_URLS[category]
 
 
-def discover_products(category="headphones"):
+def discover_products(category="headphones", limit=None):
     category_url = _resolve_category_url(category)
     fallback_category = category
 
@@ -47,7 +47,7 @@ def discover_products(category="headphones"):
     print("This may take a while...")
 
     start = time.time()
-    products = get_all_coolblue_products(category_url)
+    products = get_all_coolblue_products(category_url, max_products=limit)
     elapsed = time.time() - start
 
     if len(products) == 0:
@@ -135,10 +135,9 @@ def run_category(conn, category, limit=None):
     products = []
 
     try:
-        products, fallback_category = discover_products(category)
+        products, fallback_category = discover_products(category, limit=limit)
 
         if limit is not None:
-            print(f"[DEV] --limit {limit}: capping at {min(limit, len(products))} products")
             products = products[:limit]
 
         run_id = create_scrape_run(conn, job_name=f"discover_products_{category}", total_products=len(products))
