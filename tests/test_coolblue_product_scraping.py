@@ -1,9 +1,14 @@
 from pathlib import Path
 import sys
+import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.coolblue_product_scraping import extract_product_description, extract_product_specs
+from src.coolblue_product_scraping import (
+    extract_product_description,
+    extract_product_specs,
+    extract_product_category,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +109,57 @@ def test_extract_description_empty_collapse_returns_none():
     </section>
     """
     assert extract_product_description(html) is None
+
+
+def test_extract_description_no_section_wrapper_react_id():
+    # Some product pages omit section#product-information entirely and use a
+    # React-generated id on the content div instead of 'collapse-content-*'.
+    html = """
+    <div>
+      <h3>Omschrijving</h3>
+      <div><div id="_R_ql6jal6lll5bsnpfiuifb_">Description from React page.</div></div>
+    </div>
+    """
+    result = extract_product_description(html)
+    assert result == "Description from React page."
+
+
+def test_extract_description_nested_html_joined_with_spaces():
+    # Collapse div contains block-level HTML — get_text(separator=" ") should
+    # join each text node with a space and strip surrounding whitespace.
+    html = """
+    <section id="product-information">
+      <div>
+        <h3>Omschrijving</h3>
+        <div>
+          <div id="collapse-content-abc123">
+            <p>First paragraph.</p><p>Second paragraph.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+    result = extract_product_description(html)
+    assert result == "First paragraph. Second paragraph."
+
+
+def test_extract_description_omschrijving_not_first_h3():
+    # A different section heading appears before Omschrijving — the parser
+    # must iterate all h3 elements and find the correct one.
+    html = """
+    <section id="product-information">
+      <div>
+        <h3>Korte specificaties</h3>
+        <div>Some specs here.</div>
+      </div>
+      <div>
+        <h3>Omschrijving</h3>
+        <div><div id="collapse-content-def456">Correct description.</div></div>
+      </div>
+    </section>
+    """
+    result = extract_product_description(html)
+    assert result == "Correct description."
 
 
 # ---------------------------------------------------------------------------
@@ -463,3 +519,149 @@ def test_extract_specs_soundbars_speaker_only_key_absent():
     result = extract_product_specs(html, "soundbars")
     assert "speaker_type" not in result
     assert result == {"audio_rendering": "Surround"}
+
+
+# ---------------------------------------------------------------------------
+# extract_product_specs — structural edge cases
+# ---------------------------------------------------------------------------
+
+def test_extract_specs_row_with_one_td_is_skipped():
+    # A <tr> with only one <td> (no separate icon + value columns) must be
+    # skipped; the valid row alongside it must still be extracted.
+    html = """
+    <section id="product-specifications">
+      <table>
+        <tr>
+          <th><p>Type oorkussen</p></th>
+          <td>Over ear</td>
+        </tr>
+        <tr>
+          <td width="32"></td>
+          <th><p>Bluetooth-versie</p></th>
+          <td>5.3</td>
+        </tr>
+      </table>
+    </section>
+    """
+    result = extract_product_specs(html, "headphones")
+    assert "ear_cup_type" not in result
+    assert result == {"bluetooth_version": "5.3"}
+
+
+def test_extract_specs_svg_without_aria_label_value_dropped():
+    # SVG present but no aria-label → falls back to get_text() → empty string
+    # → must be filtered out; the valid row alongside it must still be present.
+    html = """
+    <section id="product-specifications">
+      <table>
+        <tr>
+          <td width="32"></td>
+          <th><p>Noise cancelling</p></th>
+          <td><svg></svg></td>
+        </tr>
+        <tr>
+          <td width="32"></td>
+          <th><p>Type oorkussen</p></th>
+          <td>Over ear</td>
+        </tr>
+      </table>
+    </section>
+    """
+    result = extract_product_specs(html, "headphones")
+    assert "noise_cancelling" not in result
+    assert result == {"ear_cup_type": "Over ear"}
+
+
+def test_extract_specs_duplicate_label_last_value_wins():
+    # If the same Dutch label appears twice in the table, the last row's value
+    # should be stored (dict overwrite behaviour).
+    html = _specs_html([
+        ("Type oorkussen", "Over ear", False),
+        ("Type oorkussen", "On ear", False),
+    ])
+    result = extract_product_specs(html, "headphones")
+    assert result == {"ear_cup_type": "On ear"}
+
+
+def test_extract_specs_whitespace_only_value_dropped():
+    # A <td> whose text strips to "" must be excluded from the result.
+    html = """
+    <section id="product-specifications">
+      <table>
+        <tr>
+          <td width="32"></td>
+          <th><p>Type oorkussen</p></th>
+          <td>   </td>
+        </tr>
+        <tr>
+          <td width="32"></td>
+          <th><p>Bluetooth-versie</p></th>
+          <td>5.3</td>
+        </tr>
+      </table>
+    </section>
+    """
+    result = extract_product_specs(html, "headphones")
+    assert "ear_cup_type" not in result
+    assert result == {"bluetooth_version": "5.3"}
+
+
+# ---------------------------------------------------------------------------
+# extract_product_category
+# ---------------------------------------------------------------------------
+
+def _breadcrumb_script(items: list[str]) -> str:
+    """Build a JSON-LD BreadcrumbList script tag from a list of item names."""
+    data = {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"name": name, "position": i + 1}
+            for i, name in enumerate(items)
+        ],
+    }
+    return f'<script type="application/ld+json">{json.dumps(data)}</script>'
+
+
+def test_extract_category_recognizable_term_returns_category():
+    # Standard category page breadcrumb: Home > Hoofdtelefoons > product name
+    html = _breadcrumb_script(["Home", "Hoofdtelefoons", "Sony WH-1000XM5"])
+    assert extract_product_category(html) == "headphones"
+
+
+def test_extract_category_all_four_categories():
+    # Each category term must resolve to its controlled value.
+    cases = [
+        (["Home", "Hoofdtelefoons", "Product"], "headphones"),
+        (["Home", "Oordopjes", "Product"], "earbuds"),
+        (["Home", "Draadloze speakers", "Product"], "speakers"),
+        (["Home", "Soundbars", "Product"], "soundbars"),
+    ]
+    for items, expected in cases:
+        result = extract_product_category(_breadcrumb_script(items))
+        assert result == expected, f"Expected {expected!r} for breadcrumb {items}"
+
+
+def test_extract_category_brand_path_returns_none():
+    # Sony brand-path pages have no recognisable category term —
+    # Home > Alle merken > Sony > product name → None.
+    html = _breadcrumb_script(["Home", "Alle merken", "Sony", "Sony WH-1000XM5"])
+    assert extract_product_category(html) is None
+
+
+def test_extract_category_no_breadcrumb_script_returns_none():
+    # Only a Product JSON-LD block present — no BreadcrumbList → None.
+    product = {"@type": "Product", "name": "Sony WH-1000XM5"}
+    html = f'<script type="application/ld+json">{json.dumps(product)}</script>'
+    assert extract_product_category(html) is None
+
+
+def test_extract_category_multiple_scripts_finds_breadcrumb():
+    # Page has both a Product block and a BreadcrumbList block —
+    # parser must skip the Product block and process the BreadcrumbList.
+    product = {"@type": "Product", "name": "Sony WF-1000XM5"}
+    breadcrumb = _breadcrumb_script(["Home", "Oordopjes", "Sony WF-1000XM5"])
+    html = (
+        f'<script type="application/ld+json">{json.dumps(product)}</script>'
+        + breadcrumb
+    )
+    assert extract_product_category(html) == "earbuds"

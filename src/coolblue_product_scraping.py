@@ -373,17 +373,21 @@ _SPEC_KEYS: dict[str, dict[str, str]] = {
 
 def extract_product_description(html: str) -> str | None:
     """
-    Extract the product description text from the 'Omschrijving' section
-    inside section#product-information.
-    Returns None if the section or heading is absent.
+    Extract the product description text from the 'Omschrijving' heading.
+
+    Searches the full document for an h3 containing 'Omschrijving' — does not
+    require a section#product-information wrapper, which is absent on some
+    product pages.  The content div is located by finding any div with an id
+    attribute inside the heading's parent container; this covers both the
+    stable 'collapse-content-*' id pattern and React-generated ids (e.g.
+    '_R_ql6jal6lll5bsnpfiuifb_') used on certain product pages.
+
+    Returns None if the heading or content div is absent or empty.
     """
     soup = BeautifulSoup(html, "html.parser")
-    sec = soup.find("section", id="product-information")
-    if not sec:
-        return None
 
     omschrijving_div = None
-    for h3 in sec.find_all("h3"):
+    for h3 in soup.find_all("h3"):
         if "Omschrijving" in h3.get_text():
             omschrijving_div = h3.parent
             break
@@ -391,7 +395,7 @@ def extract_product_description(html: str) -> str | None:
     if omschrijving_div is None:
         return None
 
-    collapse = omschrijving_div.find("div", id=lambda x: x and x.startswith("collapse-content-"))
+    collapse = omschrijving_div.find("div", id=True)
     if not collapse:
         return None
 
@@ -428,7 +432,7 @@ def extract_product_specs(html: str, category: str) -> dict | None:
             value = value_td.get_text(strip=True)
         raw[label] = value
 
-    return {eng_key: raw[nl_label] for nl_label, eng_key in key_map.items() if nl_label in raw}
+    return {eng_key: raw[nl_label] for nl_label, eng_key in key_map.items() if nl_label in raw and raw[nl_label]}
 
 
 # ----------------------------
