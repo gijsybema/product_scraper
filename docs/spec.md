@@ -170,6 +170,8 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | Specs schema varies by category | Use JSONB for specs; document expected keys per category in README |
 | Scrape run time scales with product count | Current pacing (2–4s/product + batch pauses) gives ~60–80 min for 800 products — acceptable for a daily job; revisit if categories expand significantly or run time approaches 3–4 hours |
 | Bundle product pages expose specs for multiple products in one `section#product-specifications` | Bundle pages do not appear on category filter pages used by discovery, so this is low risk currently. If a bundle URL were scraped, `extract_product_specs` would silently mix specs from both products (last Dutch label occurrence wins). Fix if needed: scope parsing to the first `div[id^='tabs-panel-']` rather than the whole section. |
+| **Known issue:** ~4.4% of headphone products have `description = NULL` permanently | These are discontinued products ("nooit meer leverbaar") — still return HTTP 200 so deactivation logic never fires, but Coolblue removes them from category filter pages so `discover_products.py` never re-upserts them. Null description is cosmetically harmless (these products are out of stock and excluded from deal pages). Root fix: see T25. |
+| **Known issue:** deactivation logic does not catch permanently discontinued products | Current logic deactivates on 3× HTTP 404. Coolblue "nooit meer leverbaar" pages return 200 with an out-of-stock flag — they never trip the 404 threshold and stay `active = true` indefinitely. These products consume price-scrape capacity and pollute product counts. Root fix: see T25. |
 
 ---
 
@@ -205,8 +207,10 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T20b | Stop crawling category pages early when `--limit N` is set: pass the limit into `get_all_coolblue_products` so it stops after fetching `ceil(N / products_per_page)` pages instead of crawling all pages first | 9 |
 | ✅ | T21 | Update README and add-a-category guide | 10 |
 | ✅ | T22 | Document scraping safety + source terms risk | 10 |
-| ⬜ | T23 | Edge-case parser tests + optional integration tests; investigate ~10% of products with null description/specs after production discovery pass (likely non-standard page structure or inactive products) | 11 |
+| ✅ | T23 | Edge-case parser tests + optional integration tests; investigate ~10% of products with null description/specs after production discovery pass (likely non-standard page structure or inactive products) | 11 |
+| ✅ | T23b | After next Railway discovery run: re-run Query 1 and confirm headphone null description rate dropped. **Finding:** residual ~4.4% nulls are exclusively discontinued ("nooit meer leverbaar") products — removed from Coolblue filter pages so never re-discovered; null description is harmless as these products are out of stock. Deactivation gap logged as T25. | 11 |
 | ⬜ | T24 | Cleanup of repo | 11 |
+| ⬜ | T25 | Revisit deactivation logic: currently only triggers on 3× HTTP 404, but Coolblue "nooit meer leverbaar" products return HTTP 200 indefinitely and never get deactivated. Options: (a) detect the "nooit meer leverbaar" signal in `scrape_product_facts` and count it toward deactivation, or (b) deactivate after N consecutive `in_stock = false` scrapes (e.g. 30 days). Decide threshold policy before implementing. | 11 |
 
 ---
 
