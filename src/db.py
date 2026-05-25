@@ -1,6 +1,6 @@
 import psycopg2
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from psycopg2 import OperationalError
 from typing import Optional
 import json
@@ -295,5 +295,51 @@ def reset_404_count(conn, product_id: int) -> None:
             "UPDATE products SET consecutive_404s = 0 WHERE id = %s AND consecutive_404s > 0",
             (product_id,),
         )
+
+
+OOS_DEACTIVATION_THRESHOLD = 30  # consecutive calendar days out of stock before deactivation
+
+
+def deactivate_if_long_term_oos(conn, product_id: int, threshold: int = OOS_DEACTIVATION_THRESHOLD) -> bool:
+    """
+    Check whether a product has been out of stock for every scraped day in the
+    last `threshold` calendar days. Deactivates it (active=false) if so.
+
+    Returns True if the product was newly deactivated this call.
+    Does not commit — caller owns the transaction.
+
+    Re-activation is handled by discover_products.py: if the product reappears
+    on a Coolblue category filter page, upsert_product sets active=true again.
+    """
+    cutoff = date.today() - timedelta(days=threshold)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                COUNT(DISTINCT scraped_at)                                     AS total_days,
+                COUNT(DISTINCT scraped_at) FILTER (WHERE availability = false) AS oos_days
+            FROM price_history
+            WHERE product_id = %s
+              AND scraped_at > %s
+            """,
+            (product_id, cutoff),
+        )
+        row = cur.fetchone()
+
+    if row is None:
+        return False
+
+    total_days, oos_days = row
+    if total_days < threshold or oos_days < total_days:
+        return False
+
+    # Window is full and every day is OOS — deactivate
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE products SET active = false WHERE id = %s AND active = true RETURNING id",
+            (product_id,),
+        )
+        return cur.fetchone() is not None
 
 

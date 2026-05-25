@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch, call
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD
+from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD
 
 
 # --- idempotency ---
@@ -74,3 +74,45 @@ def test_reset_404_count_only_updates_nonzero():
     # Guard clause prevents unnecessary writes when counter is already 0.
     source = inspect.getsource(reset_404_count)
     assert "consecutive_404s > 0" in source
+
+
+# --- deactivate_if_long_term_oos ---
+
+def test_deactivate_if_long_term_oos_sql_structure():
+    # Must query price_history for OOS days and update products on threshold.
+    source = inspect.getsource(deactivate_if_long_term_oos)
+    assert "price_history" in source
+    assert "OOS_DEACTIVATION_THRESHOLD" in source  # default arg — not hardcoded inline
+    assert "UPDATE products" in source
+    assert "active = false" in source
+    assert "RETURNING id" in source
+
+def test_deactivate_if_long_term_oos_returns_true_when_deactivated():
+    # Full window of 30 days, all OOS — product should be deactivated.
+    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD, OOS_DEACTIVATION_THRESHOLD))
+    ctx_update, _ = _make_cursor((1,))  # RETURNING id returns a row
+    conn = MagicMock()
+    conn.cursor.side_effect = [ctx_select, ctx_update]
+    assert deactivate_if_long_term_oos(conn, product_id=1) is True
+
+def test_deactivate_if_long_term_oos_returns_false_insufficient_history():
+    # Only 15 days of data — window not full yet, no deactivation.
+    ctx_select, _ = _make_cursor((15, 15))
+    conn = MagicMock()
+    conn.cursor.return_value = ctx_select
+    assert deactivate_if_long_term_oos(conn, product_id=1) is False
+
+def test_deactivate_if_long_term_oos_returns_false_when_in_stock_day_present():
+    # 29/30 days OOS — one in-stock day in window prevents deactivation.
+    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD, OOS_DEACTIVATION_THRESHOLD - 1))
+    conn = MagicMock()
+    conn.cursor.return_value = ctx_select
+    assert deactivate_if_long_term_oos(conn, product_id=1) is False
+
+def test_deactivate_if_long_term_oos_returns_false_when_already_inactive():
+    # Window is full and all OOS, but product already inactive — UPDATE returns no row.
+    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD, OOS_DEACTIVATION_THRESHOLD))
+    ctx_update, _ = _make_cursor(None)  # RETURNING id returns nothing — already inactive
+    conn = MagicMock()
+    conn.cursor.side_effect = [ctx_select, ctx_update]
+    assert deactivate_if_long_term_oos(conn, product_id=1) is False

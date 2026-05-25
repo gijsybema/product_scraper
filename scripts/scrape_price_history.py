@@ -27,18 +27,18 @@ FAIL_RATIO_THRESHOLD = 0.20
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.db import get_connection, upsert_price_history, get_products_to_scrape
-from src.db import create_scrape_run, finish_scrape_run, handle_product_404, reset_404_count
+from src.db import create_scrape_run, finish_scrape_run, handle_product_404, reset_404_count, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD
 from src.coolblue_product_scraping import scrape_product_facts
 from src.utils import print_progress, validate_price_facts
 from scripts.detect_drops import run_detect_drops
 
-def process_single_product(conn, product_id: int, product_url: str, scraped_at) -> Tuple[bool, bool, Optional[Exception]]:
+def process_single_product(conn, product_id: int, product_url: str, scraped_at) -> Tuple[bool, bool, Optional[bool], Optional[Exception]]:
     """
     Scrape + upsert for a single product.
-    Returns (success, is_404, error).
-    - success=True: price history written
-    - is_404=True: product returned 404, should be deactivated (no retry)
-    - otherwise: transient failure, retried up to max_attempts
+    Returns (success, is_404, in_stock, error).
+    - success=True: price history written; in_stock holds the scraped availability
+    - is_404=True: product returned 404, should be deactivated (no retry); in_stock=None
+    - otherwise: transient failure, retried up to max_attempts; in_stock=None
     """
     max_attempts = 2
     last_err: Optional[Exception] = None
@@ -54,7 +54,7 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
 
             valid, reasons = validate_price_facts({"price": price, "in_stock": in_stock})
             if not valid:
-                return False, False, ValueError(f"[VALIDATION] product_id={product_id} reasons={reasons}")
+                return False, False, None, ValueError(f"[VALIDATION] product_id={product_id} reasons={reasons}")
 
             upsert_price_history(
                 conn,
@@ -66,11 +66,11 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
                 review_count=review_count,
             )
 
-            return True, False, None  # ✅ success
+            return True, False, in_stock, None  # ✅ success
 
         except requests.exceptions.HTTPError as e:
             if e.response is not None and e.response.status_code == 404:
-                return False, True, e  # product gone — deactivate, don't retry
+                return False, True, None, e  # product gone — deactivate, don't retry
             last_err = e
             if attempt < max_attempts:
                 sleep_s = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
@@ -94,7 +94,7 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
                 time.sleep(sleep_s)
 
     # ❌ failed after retries
-    return False, False, last_err
+    return False, False, None, last_err
 
 def process_products(conn, products):
     total = len(products)
@@ -130,7 +130,7 @@ def process_products(conn, products):
                 est_time_left=est_time_left,
             )
 
-            ok, is_404, err = process_single_product(
+            ok, is_404, in_stock, err = process_single_product(
                 conn,
                 product_id=product_id,
                 product_url=product_url,
@@ -142,6 +142,14 @@ def process_products(conn, products):
                     reset_404_count(conn, product_id)
                 except Exception as reset_err:
                     print(f"[WARN] Failed to reset 404 count for product_id={product_id}: {reset_err}")
+                if in_stock is False:
+                    try:
+                        newly_deactivated = deactivate_if_long_term_oos(conn, product_id)
+                        if newly_deactivated:
+                            deactivated += 1
+                            print(f"🚫 OOS deactivated product_id={product_id} (>{OOS_DEACTIVATION_THRESHOLD} consecutive days out of stock)")
+                    except Exception as oos_err:
+                        print(f"[WARN] Failed OOS deactivation check for product_id={product_id}: {oos_err}")
                 conn.commit()
                 total_iter_time += time.time() - iter_start
                 success += 1
