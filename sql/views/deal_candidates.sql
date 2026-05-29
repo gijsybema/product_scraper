@@ -63,7 +63,6 @@ SELECT
   p.name,
   p.brand,
   p.category,
-  p.slug,
   p.product_url,
   p.image_url,
   cp.current_price,
@@ -73,7 +72,8 @@ SELECT
     ((m.max_price_30d - cp.current_price) / m.max_price_30d) * 100,
     1
   ) AS price_drop_pct,
-  cps.price_level_since::text AS price_level_since
+  cps.price_level_since::text AS price_level_since,
+  p.slug
 FROM products p
 JOIN current_prices cp ON cp.product_id = p.id
 JOIN max_30d m ON m.product_id = p.id
