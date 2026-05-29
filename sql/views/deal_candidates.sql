@@ -63,6 +63,7 @@ SELECT
   p.name,
   p.brand,
   p.category,
+  p.slug,
   p.product_url,
   p.image_url,
   cp.current_price,
