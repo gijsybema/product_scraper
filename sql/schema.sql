@@ -91,6 +91,8 @@ CREATE INDEX IF NOT EXISTS idx_scrape_runs_next_retry
   ON scrape_runs(job_name, next_retry_at)
   WHERE next_retry_at IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_products_category ON products (category);
-CREATE INDEX IF NOT EXISTS idx_products_slug     ON products (slug);
+CREATE INDEX IF NOT EXISTS idx_products_category        ON products      (category);
+CREATE INDEX IF NOT EXISTS idx_products_slug            ON products      (slug);
+CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history (product_id);
+CREATE INDEX IF NOT EXISTS idx_price_drops_product_id   ON price_drops   (product_id);
 
