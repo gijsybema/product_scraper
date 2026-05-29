@@ -210,7 +210,8 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T23 | Edge-case parser tests + optional integration tests; investigate ~10% of products with null description/specs after production discovery pass (likely non-standard page structure or inactive products) | 11 |
 | ✅ | T23b | After next Railway discovery run: re-run Query 1 and confirm headphone null description rate dropped. **Finding:** residual ~4.4% nulls are exclusively discontinued ("nooit meer leverbaar") products — removed from Coolblue filter pages so never re-discovered; null description is harmless as these products are out of stock. Deactivation gap logged as T25. | 11 |
 | ✅ | T24 | Cleanup of repo | 11 |
-| ✅ | T25 | Revisit deactivation logic: currently only triggers on 3× HTTP 404, but Coolblue "nooit meer leverbaar" products return HTTP 200 indefinitely and never get deactivated. **Implemented option (b):** deactivate after 30 consecutive OOS days using a streak from last in-stock date (robust to scraping gaps). **Verified:** health check confirmed no active products with `consecutive_oos_days >= 30`. | 11 |
+| ✅ | T25 | Revisit deactivation logic: currently only triggers on 3× HTTP 404, but Coolblue "nooit meer leverbaar" products return HTTP 200 indefinitely and never get deactivated. **Implemented option (b):** deactivate after 30 consecutive OOS days using a streak from last in-stock date (robust to scraping gaps). **Verified:** Railway log showed `🚫 OOS deactivated` lines confirming deactivation fired. | 11 |
+| ⬜ | T25b | Run deactivation health check in `sql/db_analytical_checks.sql` and confirm no active products have `consecutive_oos_days >= 30` (status `⚠ should be deactivated`). | 11 |
 | ⬜ | T26 | Check spec document and clean it | 11 |
 
 ---
