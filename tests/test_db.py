@@ -79,39 +79,41 @@ def test_reset_404_count_only_updates_nonzero():
 # --- deactivate_if_long_term_oos ---
 
 def test_deactivate_if_long_term_oos_sql_structure():
-    # Must query price_history for OOS days and update products on threshold.
+    # Must count OOS days since last in-stock date and update products on threshold.
     source = inspect.getsource(deactivate_if_long_term_oos)
     assert "price_history" in source
     assert "OOS_DEACTIVATION_THRESHOLD" in source  # default arg — not hardcoded inline
+    assert "availability = true" in source   # last-in-stock subquery
+    assert "availability = false" in source  # OOS streak count
     assert "UPDATE products" in source
     assert "active = false" in source
     assert "RETURNING id" in source
 
 def test_deactivate_if_long_term_oos_returns_true_when_deactivated():
-    # Full window of 30 days, all OOS — product should be deactivated.
-    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD, OOS_DEACTIVATION_THRESHOLD))
+    # Streak of 30 OOS days — product should be deactivated.
+    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD,))
     ctx_update, _ = _make_cursor((1,))  # RETURNING id returns a row
     conn = MagicMock()
     conn.cursor.side_effect = [ctx_select, ctx_update]
     assert deactivate_if_long_term_oos(conn, product_id=1) is True
 
-def test_deactivate_if_long_term_oos_returns_false_insufficient_history():
-    # Only 15 days of data — window not full yet, no deactivation.
-    ctx_select, _ = _make_cursor((15, 15))
+def test_deactivate_if_long_term_oos_returns_false_insufficient_streak():
+    # Only 15 consecutive OOS days — below threshold, no deactivation.
+    ctx_select, _ = _make_cursor((15,))
     conn = MagicMock()
     conn.cursor.return_value = ctx_select
     assert deactivate_if_long_term_oos(conn, product_id=1) is False
 
-def test_deactivate_if_long_term_oos_returns_false_when_in_stock_day_present():
-    # 29/30 days OOS — one in-stock day in window prevents deactivation.
-    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD, OOS_DEACTIVATION_THRESHOLD - 1))
+def test_deactivate_if_long_term_oos_returns_false_when_streak_reset_by_in_stock():
+    # Recent in-stock day reset the streak to 29 — just below threshold.
+    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD - 1,))
     conn = MagicMock()
     conn.cursor.return_value = ctx_select
     assert deactivate_if_long_term_oos(conn, product_id=1) is False
 
 def test_deactivate_if_long_term_oos_returns_false_when_already_inactive():
-    # Window is full and all OOS, but product already inactive — UPDATE returns no row.
-    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD, OOS_DEACTIVATION_THRESHOLD))
+    # Streak reached threshold, but product already inactive — UPDATE returns no row.
+    ctx_select, _ = _make_cursor((OOS_DEACTIVATION_THRESHOLD,))
     ctx_update, _ = _make_cursor(None)  # RETURNING id returns nothing — already inactive
     conn = MagicMock()
     conn.cursor.side_effect = [ctx_select, ctx_update]

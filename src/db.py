@@ -1,6 +1,6 @@
 import psycopg2
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from psycopg2 import OperationalError
 from typing import Optional
 import json
@@ -302,39 +302,39 @@ OOS_DEACTIVATION_THRESHOLD = 30  # consecutive calendar days out of stock before
 
 def deactivate_if_long_term_oos(conn, product_id: int, threshold: int = OOS_DEACTIVATION_THRESHOLD) -> bool:
     """
-    Check whether a product has been out of stock for every scraped day in the
-    last `threshold` calendar days. Deactivates it (active=false) if so.
+    Count the number of consecutive OOS days for a product: all scraped days
+    with availability=false since the most recent availability=true day (or
+    since ever, if the product has never been in stock).
 
+    Deactivates the product (active=false) if the streak reaches `threshold`.
     Returns True if the product was newly deactivated this call.
     Does not commit — caller owns the transaction.
 
     Re-activation is handled by discover_products.py: if the product reappears
     on a Coolblue category filter page, upsert_product sets active=true again.
     """
-    cutoff = date.today() - timedelta(days=threshold)
-
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT
-                COUNT(DISTINCT scraped_at)                                     AS total_days,
-                COUNT(DISTINCT scraped_at) FILTER (WHERE availability = false) AS oos_days
-            FROM price_history
-            WHERE product_id = %s
-              AND scraped_at > %s
+            SELECT COUNT(DISTINCT ph.scraped_at) AS consecutive_oos_days
+            FROM price_history ph
+            WHERE ph.product_id = %s
+              AND ph.availability = false
+              AND ph.scraped_at > COALESCE(
+                  (SELECT MAX(scraped_at)
+                   FROM price_history
+                   WHERE product_id = %s AND availability = true),
+                  '1900-01-01'::date
+              )
             """,
-            (product_id, cutoff),
+            (product_id, product_id),
         )
         row = cur.fetchone()
 
-    if row is None:
+    if row is None or row[0] < threshold:
         return False
 
-    total_days, oos_days = row
-    if total_days < threshold or oos_days < total_days:
-        return False
-
-    # Window is full and every day is OOS — deactivate
+    # Streak has reached threshold — deactivate
     with conn.cursor() as cur:
         cur.execute(
             "UPDATE products SET active = false WHERE id = %s AND active = true RETURNING id",

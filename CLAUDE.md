@@ -25,6 +25,7 @@
 - When writing Coolblue parsers: anchor selectors on stable identifiers (section id, aria-label, heading text content) — never on generated CSS class names (css-*), which change between deploys
 - When running inspect_product_page.py for parser recon: if the specs output contains two `Artikelnummer` rows or duplicate Dutch labels, the URL is a bundle page — use a single-product URL instead to ensure the key mapping covers only one product's spec structure
 - Never modify `docs/spec.md` without explicit user confirmation; always show proposed changes and wait for approval
+- Before implementing a SQL check that depends on a minimum row count (e.g. `COUNT(...) >= N` in a time window): run a diagnostic query against the live DB to verify actual data density before finalising N
 
 
 ## Output Style

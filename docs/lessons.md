@@ -126,6 +126,15 @@
 
 ---
 
+## T25 — OOS deactivation logic
+
+- **Verify data density before hardcoding a window threshold.** The 30-calendar-day window (`scraped_at > CURRENT_DATE - 30 days` + `COUNT >= 30`) looked correct in code review but returned zero results in production because scraping gaps meant no product had 30 distinct scrape days in any 30-day window. A single diagnostic count query run before implementation would have caught this instantly. For any `COUNT(...) >= N` check: verify N against real data first.
+- **Streak-based logic is more robust than calendar windows for irregular data.** Anchoring on the last state-change event (`MAX(scraped_at) WHERE availability = true`) and counting forward is resilient to scraping gaps — the streak only asks "has this been continuously true since the last change?" A calendar window requires consistent data density. Prefer the streak pattern when the data source has known gaps.
+- **Diagnostic queries belong alongside the feature, not after it.** Building the deactivation health check query *before* committing the function would have exposed the window problem before the first push. For any DB-backed threshold feature: write and run the diagnostic query first, then design the logic around what the data actually looks like.
+- **Expanding a tuple return touches more sites than expected.** Changing `process_single_product` from 3 to 4 values required updating 3 return sites + type hint + docstring + call site. Grep for all consumers of the function before starting. Pattern: search for the function name across the codebase before expanding its return signature.
+
+---
+
 ## Post T14 — Running discovery in production + spec housekeeping
 
 - **Verify SQL before stating behavioral claims.** Said "30 days of data needed before deals show" without reading `deal_candidates.sql` first — the view only requires one price drop. Read the source before asserting logic.
