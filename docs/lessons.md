@@ -142,3 +142,13 @@
 - **`railway run` injects its own env vars and overrides locals.** Setting `$env:DATABASE_URL` locally has no effect when using `railway run` — it overwrites with the internal hostname. The correct pattern for one-off production scripts: skip `railway run`, set `DATABASE_URL` to the public URL, and run Python directly.
 
 ---
+
+## T26 — Spec document cleanup
+
+- **A completed spec is a historical artifact — freeze it.** Once all tasks are done, the spec's job is to serve as a record of what was built and why. Don't append new features to it; start a fresh file so each spec has a clear scope and a clear end.
+- **One spec per independent scope.** A self-contained feature with its own definition of done gets its own spec file. A minor tweak (adjusting a threshold, adding a column) doesn't need one — a clear commit message is enough.
+- **Name spec files descriptively and version them.** `spec_backend_pipeline_v1.md` is better than `spec.md`: it says what the scope was and signals that future work builds on top of it rather than modifying this file.
+- **Add start and completion dates.** A spec is a historical document; two lines at the top give immediate orientation without opening the whole file.
+- **`docs/` becomes a library over time.** Each spec file is a closed chapter of the product's history. Future you (or a new collaborator) can read them in order and understand how the product evolved.
+
+---
