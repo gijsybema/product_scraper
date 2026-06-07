@@ -95,4 +95,5 @@ CREATE INDEX IF NOT EXISTS idx_products_category        ON products      (catego
 CREATE INDEX IF NOT EXISTS idx_products_slug            ON products      (slug);
 CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history (product_id);
 CREATE INDEX IF NOT EXISTS idx_price_drops_product_id   ON price_drops   (product_id);
-
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_fts  ON products 
+  USING GIN (to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(brand, '')));
