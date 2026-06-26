@@ -12,6 +12,10 @@ try:
 except ModuleNotFoundError:
     from utils import normalize_category
 
+
+class CoolblueBlockedError(Exception):
+    """Raised when Coolblue returns repeated 403s indicating an IP block."""
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -98,6 +102,7 @@ def fetch_response_with_retry(
 
     last_resp = None
     last_err = None
+    attempts_403 = 0
 
     # Referer sometimes helps; keep it light
     headers = {"Referer": "https://www.coolblue.nl/"}
@@ -108,7 +113,19 @@ def fetch_response_with_retry(
             resp = session.get(url, timeout=timeout, allow_redirects=True, headers=headers)
             last_resp = resp
 
-            # If 4xx/5xx after retries -> fail hard
+            # 403 = IP block — sleep and retry up to 3 times
+            if resp.status_code == 403:
+                attempts_403 += 1
+                if attempts_403 >= 3:
+                    raise CoolblueBlockedError(
+                        f"Blocked by Coolblue (403) after {attempts_403} retries for {url}"
+                    )
+                sleep_s = min(30 * (2 ** (attempts_403 - 1)), 120) + random.uniform(0, 5)
+                print(f"[FETCH] 403 block (attempt {attempts_403}/3) → sleeping {sleep_s:.1f}s before retry")
+                time.sleep(sleep_s)
+                continue
+
+            # If other 4xx/5xx -> fail hard
             if resp.status_code >= 400:
                 resp.raise_for_status()
 

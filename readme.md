@@ -79,6 +79,7 @@ DB_NAME=price_tracker
 DB_USER=postgres
 DB_PASSWORD='your_password'
 PROD_READONLY_URL=postgresql://scraper_readonly:your_password@your-railway-host:port/railway
+DATABASE_PUBLIC_URL=postgresql://postgres:your_password@your-railway-host:port/railway
 TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
 ```
@@ -110,21 +111,24 @@ Railway cron jobs run automatically, but occasionally you need to trigger a scri
 
 **Do not use `railway run`** — it injects the internal database hostname (`postgres.railway.internal`), which is unreachable from your local machine.
 
-Instead, connect directly using the public database URL:
+Instead, connect directly using the public database URL.
 
-1. Open the [Railway dashboard](https://railway.app) → your project → Postgres service → **Variables** tab
-2. Copy the value of `DATABASE_PUBLIC_URL` (hostname looks like `roundhouse.proxy.rlwy.net`)
-3. Set it locally and run the script:
+**One-time setup** — add this to `.env.local` (find the value in Railway dashboard → Postgres service → Variables tab):
+
+```
+DATABASE_PUBLIC_URL=postgresql://postgres:<password>@<public-host>:<port>/railway
+```
 
 **PowerShell:**
 ```powershell
-$env:DATABASE_URL="postgresql://postgres:<password>@<public-host>:<port>/railway"
+$env:DATABASE_URL = (Get-Content .env.local | Select-String "^DATABASE_PUBLIC_URL=").ToString().Split("=",2)[1]
 python scripts/discover_products.py --all
 ```
 
 **bash:**
 ```bash
-DATABASE_URL="postgresql://postgres:<password>@<public-host>:<port>/railway" python scripts/discover_products.py --all
+export DATABASE_URL=$(grep ^DATABASE_PUBLIC_URL= .env.local | cut -d= -f2-)
+python scripts/discover_products.py --all
 ```
 
 The script reads `DATABASE_URL` and connects over the public hostname. No Railway CLI needed.
