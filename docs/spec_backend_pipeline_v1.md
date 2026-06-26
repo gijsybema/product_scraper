@@ -169,6 +169,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | Schema too tied to Coolblue | `retailer` column added; scraping logic isolated from business logic |
 | Rewriting too much at once | Strict slice-by-slice workflow; no phase spans more than one concern |
 | Source terms / scraping legality | Document assumptions now; plan migration to official feed as future work |
+| **Known risk:** Coolblue IP blocking during `discover_products` | Observed once (2026-06-26): ~58 products succeeded then all remaining returned 403 for the rest of the run. Subsequent manual run completed cleanly (766/766). Likely Railway shared egress IP reputation. T27 adds graceful abort + `status='blocked'` visibility. If blocking becomes systematic: options are (a) increase inter-product delay to 10–30s, (b) proxy/IP rotation, (c) split discovery into smaller daily batches. Monitor `scrape_runs` for recurrence. |
 | Specs schema varies by category | Use JSONB for specs; document expected keys per category in README |
 | Scrape run time scales with product count | Current pacing (2–4s/product + batch pauses) gives ~60–80 min for 800 products — acceptable for a daily job; revisit if categories expand significantly or run time approaches 3–4 hours |
 | Bundle product pages expose specs for multiple products in one `section#product-specifications` | Bundle pages do not appear on category filter pages used by discovery, so this is low risk currently. If a bundle URL were scraped, `extract_product_specs` would silently mix specs from both products (last Dutch label occurrence wins). Fix if needed: scope parsing to the first `div[id^='tabs-panel-']` rather than the whole section. |
@@ -215,6 +216,8 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T25 | Revisit deactivation logic: currently only triggers on 3× HTTP 404, but Coolblue "nooit meer leverbaar" products return HTTP 200 indefinitely and never get deactivated. **Implemented option (b):** deactivate after 30 consecutive OOS days using a streak from last in-stock date (robust to scraping gaps). **Verified:** Railway log showed `🚫 OOS deactivated` lines confirming deactivation fired. | 11 |
 | ✅ | T25b | Run deactivation health check in `sql/db_analytical_checks.sql` and confirm no active products have `consecutive_oos_days >= 30` (status `⚠ should be deactivated`). | 11 |
 | ✅ | T26 | Check spec document and clean it | 11 |
+| ✅ | T27 | Add 403 block detection and graceful abort: `CoolblueBlockedError` raised after 3× 403 per product (30s/60s/120s backoff); `discover_products` aborts after 5 consecutive blocked products; `scrape_runs` records `status='blocked'` and `blocked_count` | 12 |
+| ✅ | T29 | Investigate why earbuds, speakers, and soundbars have not run since 2026-05-23. Check Railway cron config: `--all` flag should run all four categories. Confirm Railway logs and `scrape_runs` to identify whether the block happens in discovery (URL crawl) or product detail scraping, and whether the categories are being invoked at all. | 12 |
 
 ---
 
