@@ -38,6 +38,28 @@ scrape_price_history --missed-only  (daily recovery run)
 
 Schema source of truth: [`sql/schema.sql`](sql/schema.sql)
 
+## Local development database
+
+To develop against a realistic dataset, pull a subset of prod data into your local DB:
+
+```bash
+bash scripts/refresh_local_db.sh
+```
+
+This will:
+1. Apply `sql/schema.sql` + all migrations to the local DB (idempotent)
+2. Truncate all local tables
+3. Stream from prod (read-only): all retailers + products, last 90 days of price_history/price_drops, last 30 days of scrape_runs
+
+**Prerequisites:**
+- PostgreSQL client tools installed (`psql` on PATH) — download from [postgresql.org/download/windows](https://www.postgresql.org/download/windows/), install "Command Line Tools" only
+- `PROD_READONLY_URL` set in `.env.local` (Railway read-only connection string)
+- Local DB vars set in `.env.local`: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+
+**Verification queries** (run in pgAdmin before/after):
+- Local DB: [`sql/checks/refresh_before_after.sql`](sql/checks/refresh_before_after.sql)
+- Prod DB (confirm nothing changed): [`sql/checks/refresh_prod_unchanged.sql`](sql/checks/refresh_prod_unchanged.sql)
+
 ## Setup
 
 ### Local
@@ -53,9 +75,10 @@ Create `.env.local`:
 ```
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=pricetracker
+DB_NAME=price_tracker
 DB_USER=postgres
-DB_PASSWORD=your_password
+DB_PASSWORD='your_password'
+PROD_READONLY_URL=postgresql://scraper_readonly:your_password@your-railway-host:port/railway
 TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
 ```
