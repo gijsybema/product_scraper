@@ -152,3 +152,11 @@
 - **`docs/` becomes a library over time.** Each spec file is a closed chapter of the product's history. Future you (or a new collaborator) can read them in order and understand how the product evolved.
 
 ---
+
+## T27 — Schema migration: add AI description columns
+
+- **Migration-only tasks are fast when the exact DDL is specified in the spec.** T27 had zero ambiguity — the SQL was written out in `spec_ai_descriptions.md` before implementation started. For any future migration task: write the exact DDL in the spec first, then hand off.
+- **`IF NOT EXISTS` / `IF EXISTS` on every migration statement is non-negotiable for idempotency.** Follows the convention set by migrations 001–003; means the migration can be re-run safely after a partial failure without manual cleanup.
+- **New nullable columns are the safest schema change — no consumer mapping needed.** No NOT NULL constraint, no default, no existing reads. Recognising this up front meant the pre-implementation check was instant: zero downstream impact on views, validators, or `db.py`.
+
+---

@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS products (
   created_at TIMESTAMP DEFAULT NOW(),
   active BOOLEAN NOT NULL DEFAULT TRUE,
   consecutive_404s INT NOT NULL DEFAULT 0,
+  ai_description TEXT,
+  ai_deal_description TEXT,
+  ai_deal_description_updated_at TIMESTAMPTZ,
   UNIQUE (retailer_id, sku)
 );
 

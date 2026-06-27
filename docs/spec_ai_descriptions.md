@@ -241,7 +241,7 @@ Haiku pricing: $0.80/M input tokens, $4.00/M output tokens (as of June 2026).
 
 | Status | # | Task |
 |---|---|---|
-| ⬜ | T27 | Schema migration: add `ai_description`, `ai_deal_description`, `ai_deal_description_updated_at` to `products`; write rollback; update `sql/schema.sql` |
+| ✅ | T27 | Schema migration: add `ai_description`, `ai_deal_description`, `ai_deal_description_updated_at` to `products`; write rollback; update `sql/schema.sql` |
 | ⬜ | T28 | Implement `src/ai_descriptions.py`: `generate_product_description` and `generate_ai_deal_description` with shared API behaviour (model, tokens, temperature, error handling) |
 | ⬜ | T29 | Implement `get_price_context` in `src/db.py`: write and verify SQL query against live data; confirm date fields and 30-day window have sufficient data density before finalising |
 | ⬜ | T30 | Implement `update_ai_description` and `update_ai_deal_description` in `src/db.py` |
