@@ -14,3 +14,4 @@ httpx
 psycopg2-binary
 dotenv
 pytest
+anthropic>=0.40.0

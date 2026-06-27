@@ -160,3 +160,12 @@
 - **New nullable columns are the safest schema change — no consumer mapping needed.** No NOT NULL constraint, no default, no existing reads. Recognising this up front meant the pre-implementation check was instant: zero downstream impact on views, validators, or `db.py`.
 
 ---
+
+## T28 — Implement src/ai_descriptions.py
+
+- **`truststore` is the Windows SSL fix for venv HTTP clients.** Python venvs don't inherit the Windows certificate store, so any HTTPS client (httpx, requests, etc.) fails with "unable to get local issuer certificate" on networks with proxy TLS inspection. `pip install truststore` + `truststore.inject_into_ssl()` before the first call is the fix. Only needed locally — Railway runs on Linux with standard certs.
+- **A `__main__` block in the module itself is cleaner than a scratchpad script.** No path hacks, no separate file, runs with `python src/module.py`. Good default for any module with an external API call worth manually reviewing.
+- **Extract prompt builders from API call functions.** Separating `_build_*_prompt()` from the API call lets the `__main__` preview capture `response.usage` without duplicating logic, and makes prompts directly unit-testable in T34 without needing to mock the prompt shape.
+- **Stage previews before wiring to DB.** Reviewing real API output for all 4 categories before T30/T31 confirmed tone and content quality. Cheaper to adjust a prompt string than to rewrite pipeline wiring after the fact.
+
+---
