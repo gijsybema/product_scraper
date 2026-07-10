@@ -34,10 +34,11 @@ def test_404_returns_is_404_true():
     conn = _make_conn()
     with patch("scripts.scrape_price_history.scrape_product_facts",
                side_effect=_make_http_error(404)):
-        success, is_404, err = process_single_product(conn, product_id=1, product_url="http://x", scraped_at=date.today(), product=_PRODUCT)
+        success, is_404, in_stock, err = process_single_product(conn, product_id=1, product_url="http://x", scraped_at=date.today(), product=_PRODUCT)
 
     assert success is False
     assert is_404 is True
+    assert in_stock is None
     assert isinstance(err, requests.exceptions.HTTPError)
 
 
@@ -58,25 +59,27 @@ def test_non_404_http_error_is_not_deactivation():
     conn = _make_conn()
     with patch("scripts.scrape_price_history.scrape_product_facts",
                side_effect=_make_http_error(503)):
-        success, is_404, err = process_single_product(conn, product_id=1, product_url="http://x", scraped_at=date.today(), product=_PRODUCT)
+        success, is_404, in_stock, err = process_single_product(conn, product_id=1, product_url="http://x", scraped_at=date.today(), product=_PRODUCT)
 
     assert success is False
     assert is_404 is False
+    assert in_stock is None
 
 
 # --- success path ---
 
 def test_success_returns_true():
-    """A clean scrape returns (True, False, None)."""
+    """A clean scrape returns (True, False, in_stock, None)."""
     conn = _make_conn()
     facts = {"price": 199.99, "in_stock": True, "rating": 4.5, "review_count": 100}
     with patch("scripts.scrape_price_history.scrape_product_facts", return_value=facts), \
          patch("scripts.scrape_price_history.validate_price_facts", return_value=(True, [])), \
-         patch("scripts.scrape_price_history.upsert_price_history"):
-        success, is_404, err = process_single_product(conn, product_id=1, product_url="http://x", scraped_at=date.today(), product=_PRODUCT)
+         patch("scripts.scrape_price_history.upsert_price_history", return_value=None):
+        success, is_404, in_stock, err = process_single_product(conn, product_id=1, product_url="http://x", scraped_at=date.today(), product=_PRODUCT)
 
     assert success is True
     assert is_404 is False
+    assert in_stock is True
     assert err is None
 
 
