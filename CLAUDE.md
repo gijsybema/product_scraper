@@ -100,6 +100,7 @@ If verification cannot be completed (no prod DB access, UI interaction required,
 ## Dev Shortcuts
 - Both `discover_products.py` and `scrape_price_history.py` accept a `--limit N` flag to process only the first N products — use this during development to test logic without running the full pipeline. Never pass `--limit` in Railway cron jobs.
 - On Windows, if a new HTTPS dependency fails with SSL cert errors in the venv: `pip install truststore` and call `truststore.inject_into_ssl()` before the first request. Not needed on Railway.
+  - In scripts that also run on Railway (not just local `__main__` blocks), guard the import with `try: import truststore; truststore.inject_into_ssl() \ except ImportError: pass` instead of adding it to `requirements.txt` — keeps the Railway cron job unaffected by a package it doesn't have.
 - For modules with external API calls worth manually reviewing, add a `__main__` block instead of a separate script — no path hacks, runs with `python src/module.py`, lives with the code.
 
 ## Testing Conventions

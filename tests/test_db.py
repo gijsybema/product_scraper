@@ -18,6 +18,11 @@ def test_upsert_product_is_idempotent():
     assert "ON CONFLICT (retailer_id, sku)" in source
     assert "DO UPDATE" in source
 
+def test_upsert_product_returns_id_and_ai_description():
+    # Caller needs (product_id, ai_description) to decide whether to generate one.
+    source = inspect.getsource(upsert_product)
+    assert "RETURNING id, ai_description" in source
+
 def test_upsert_price_history_is_idempotent():
     # ON CONFLICT (product_id, scraped_at) ensures one record per product per day.
     source = inspect.getsource(upsert_price_history)

@@ -19,10 +19,17 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+try:
+    import truststore
+    truststore.inject_into_ssl()  # local Windows dev only; not installed/needed on Railway
+except ImportError:
+    pass
+
 from src.coolblue_discovery import get_all_coolblue_products
 from src.coolblue_product_scraping import scrape_product_details, CoolblueBlockedError
-from src.db import get_connection, upsert_product, create_scrape_run, finish_scrape_run
+from src.db import get_connection, upsert_product, update_ai_description, create_scrape_run, finish_scrape_run
 from src.utils import print_progress, validate_product_details, generate_slug
+from src.ai_descriptions import generate_product_description
 
 CATEGORY_URLS = {
     "headphones": "https://www.coolblue.nl/hoofdtelefoons/filter",
@@ -114,12 +121,23 @@ def process_products(conn, products, fallback_category=None):
             existing_slugs.add(slug)
             details["slug"] = slug
 
-            upsert_product(
+            product_id, ai_description = upsert_product(
                 conn,
                 sku=sku,
                 product_url=product_url,
                 details=details,
             )
+
+            if ai_description is None:
+                text = generate_product_description(details)
+                time.sleep(0.5)  # rate limit
+                if text:
+                    try:
+                        update_ai_description(conn, product_id, text)
+                    except Exception as ai_err:
+                        print(f"WARNING: could not write ai_description for sku={sku}: {ai_err}")
+                else:
+                    print(f"[AI DESCRIPTION SKIP] sku={sku} generation failed, left NULL")
 
             total_iter_time += time.time() - iter_start
             success += 1

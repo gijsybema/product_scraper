@@ -38,11 +38,14 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
     Insert product if it does not exist yet.
     Update name / url if it already exists.
 
-    ON CONFLICT DO UPDATE is used because product metadata (such as name or product URL) 
+    ON CONFLICT DO UPDATE is used because product metadata (such as name or product URL)
     can change over time.
     If a product already exists, its name, URL, and active status are
     updated to reflect the latest scraped data, keeping the table idempotent
     and up to date.
+
+    Returns (product_id, ai_description) so callers can check whether an
+    AI description still needs to be generated without a separate lookup.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -78,7 +81,8 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 brand = COALESCE(products.brand, EXCLUDED.brand),
                 slug = COALESCE(products.slug, EXCLUDED.slug),
                 description = COALESCE(EXCLUDED.description, products.description),
-                specs = COALESCE(EXCLUDED.specs, products.specs);
+                specs = COALESCE(EXCLUDED.specs, products.specs)
+            RETURNING id, ai_description;
             """,
             (
                 COOLBLUE_RETAILER_ID,
@@ -94,6 +98,7 @@ def upsert_product(conn, sku: str, product_url: str, details: dict):
                 json.dumps(details.get("specs")) if details.get("specs") is not None else None,
             ),
         )
+        return cur.fetchone()
 
 
 def upsert_price_history(conn, product_id: int, scraped_at: datetime, price: float, availability: bool, rating: float, review_count: int):
