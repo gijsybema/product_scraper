@@ -50,6 +50,19 @@ def generate_product_description(product: dict) -> str | None:
         return None
 
 
+def _fmt_price(value: float) -> str:
+    """Dutch-style price formatting: whole numbers have no decimals, others use a comma."""
+    if value == int(value):
+        return str(int(value))
+    return f"{value:.2f}".replace(".", ",")
+
+
+def _fmt_price_diff(value: float) -> str:
+    """Signed Dutch-style price formatting, e.g. '+50' or '-21,50'."""
+    sign = "+" if value >= 0 else "-"
+    return f"{sign}{_fmt_price(abs(value))}"
+
+
 def _build_deal_description_prompt(product: dict, price_context: dict) -> str:
     ctx = price_context
     return (
@@ -61,13 +74,15 @@ def _build_deal_description_prompt(product: dict, price_context: dict) -> str:
         "Gebruik nooit de woorden 'minimum', 'maximum' of 'segment'. Beschrijf prijzen altijd "
         "expliciet als 'laagste prijs' of 'hoogste prijs', eventueel met de tijdsperiode erbij "
         "(bijv. 'de laagste prijs in 30 dagen').\n"
+        "Gebruik exact dezelfde prijsnotatie als hieronder gegeven (bijv. €340 of €339,99) — "
+        "voeg geen decimalen toe aan hele bedragen.\n"
         "Geef uitsluitend de 1-2 zinnen terug, zonder titel, kop of opsommingstekens.\n\n"
         f"Product: {product.get('name', '')} ({product.get('brand', '')})\n"
-        f"Huidige prijs: €{ctx['current_price']} (sinds {ctx['current_price_since']})\n"
-        f"Vorige prijs: €{ctx['previous_price']} ({ctx['price_diff']:+.2f}, {ctx['drop_pct']:+.1f}%)\n"
-        f"Laagste prijs ooit: €{ctx['lowest_ever_price']} (op {ctx['lowest_ever_date']})\n"
-        f"30-daags laagste prijs: €{ctx['low_30d']} (op {ctx['low_30d_date']})\n"
-        f"30-daags hoogste prijs: €{ctx['high_30d']} (op {ctx['high_30d_date']})\n\n"
+        f"Huidige prijs: €{_fmt_price(ctx['current_price'])} (sinds {ctx['current_price_since']})\n"
+        f"Vorige prijs: €{_fmt_price(ctx['previous_price'])} ({_fmt_price_diff(ctx['price_diff'])}, {ctx['drop_pct']:+.1f}%)\n"
+        f"Laagste prijs ooit: €{_fmt_price(ctx['lowest_ever_price'])} (op {ctx['lowest_ever_date']})\n"
+        f"30-daags laagste prijs: €{_fmt_price(ctx['low_30d'])} (op {ctx['low_30d_date']})\n"
+        f"30-daags hoogste prijs: €{_fmt_price(ctx['high_30d'])} (op {ctx['high_30d_date']})\n\n"
         "Prijsanalyse:"
     )
 

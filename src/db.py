@@ -105,10 +105,19 @@ def upsert_price_history(conn, product_id: int, scraped_at: datetime, price: flo
     """
     Insert price history if it does not exist yet.
     Update price history if it already exists.
+
+    Returns the most recent price recorded for this product before
+    scraped_at (or None if this is the first row), so callers can detect
+    a price change without a separate query.
     """
     with conn.cursor() as cur:
         cur.execute(
             """
+            WITH prev AS (
+                SELECT price FROM price_history
+                WHERE product_id = %s AND scraped_at < %s
+                ORDER BY scraped_at DESC LIMIT 1
+            )
             INSERT INTO price_history (
                 product_id,
                 scraped_at,
@@ -118,14 +127,17 @@ def upsert_price_history(conn, product_id: int, scraped_at: datetime, price: flo
                 review_count
             )
             VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (product_id, scraped_at) 
+            ON CONFLICT (product_id, scraped_at)
             DO UPDATE SET
                 price = EXCLUDED.price,
                 availability = EXCLUDED.availability,
                 rating = EXCLUDED.rating,
-                review_count = EXCLUDED.review_count;
+                review_count = EXCLUDED.review_count
+            RETURNING (SELECT price FROM prev);
             """,
             (
+                product_id,
+                scraped_at,
                 product_id,
                 scraped_at,
                 price,
@@ -134,6 +146,8 @@ def upsert_price_history(conn, product_id: int, scraped_at: datetime, price: flo
                 review_count
             ),
         )
+        row = cur.fetchone()
+        return float(row[0]) if row and row[0] is not None else None
 
 
 def get_products_to_scrape(missed_only: bool = False):
@@ -147,7 +161,7 @@ def get_products_to_scrape(missed_only: bool = False):
             if missed_only:
                 cur.execute(
                     """
-                    SELECT p.id, p.product_url
+                    SELECT p.id, p.product_url, p.name, p.brand, p.category
                     FROM products p
                     WHERE p.active = true
                       AND NOT EXISTS (
@@ -158,9 +172,18 @@ def get_products_to_scrape(missed_only: bool = False):
                     """
                 )
             else:
-                cur.execute("SELECT id, product_url FROM products WHERE active = true")
+                cur.execute("SELECT id, product_url, name, brand, category FROM products WHERE active = true")
             products = cur.fetchall()
-        return [{"product_id": product[0], "product_url": product[1]} for product in products]
+        return [
+            {
+                "product_id": product[0],
+                "product_url": product[1],
+                "name": product[2],
+                "brand": product[3],
+                "category": product[4],
+            }
+            for product in products
+        ]
     finally:
         conn.close()
 

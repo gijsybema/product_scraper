@@ -1,6 +1,7 @@
 """
 Daily script to store the prices and availability of all Coolblue products
 from the product detail page in the price_history table in PostgreSQL.
+Regenerates ai_deal_description when a product's price changes.
 
 Usage:
     python scripts/scrape_price_history.py [--limit N]
@@ -26,19 +27,29 @@ FAIL_RATIO_THRESHOLD = 0.20
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.db import get_connection, upsert_price_history, get_products_to_scrape
+try:
+    import truststore
+    truststore.inject_into_ssl()  # local Windows dev only; not installed/needed on Railway
+except ImportError:
+    pass
+
+from src.db import get_connection, upsert_price_history, get_products_to_scrape, get_price_context, update_ai_deal_description
 from src.db import create_scrape_run, finish_scrape_run, handle_product_404, reset_404_count, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD
 from src.coolblue_product_scraping import scrape_product_facts
+from src.ai_descriptions import generate_ai_deal_description
 from src.utils import print_progress, validate_price_facts
 from scripts.detect_drops import run_detect_drops
 
-def process_single_product(conn, product_id: int, product_url: str, scraped_at) -> Tuple[bool, bool, Optional[bool], Optional[Exception]]:
+def process_single_product(conn, product_id: int, product_url: str, scraped_at, product: dict) -> Tuple[bool, bool, Optional[bool], Optional[Exception]]:
     """
     Scrape + upsert for a single product.
     Returns (success, is_404, in_stock, error).
     - success=True: price history written; in_stock holds the scraped availability
     - is_404=True: product returned 404, should be deactivated (no retry); in_stock=None
     - otherwise: transient failure, retried up to max_attempts; in_stock=None
+
+    On success, if today's price differs from the previous price on record,
+    regenerates ai_deal_description via get_price_context + generate_ai_deal_description.
     """
     max_attempts = 2
     last_err: Optional[Exception] = None
@@ -56,7 +67,7 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
             if not valid:
                 return False, False, None, ValueError(f"[VALIDATION] product_id={product_id} reasons={reasons}")
 
-            upsert_price_history(
+            previous_price = upsert_price_history(
                 conn,
                 product_id=product_id,
                 scraped_at=scraped_at,
@@ -65,6 +76,21 @@ def process_single_product(conn, product_id: int, product_url: str, scraped_at) 
                 rating=rating,
                 review_count=review_count,
             )
+
+            if previous_price is not None and float(price) != previous_price:
+                try:
+                    ctx = get_price_context(conn, product_id)
+                    if ctx:
+                        text = generate_ai_deal_description(product, ctx)
+                        if text:
+                            update_ai_deal_description(conn, product_id, text)
+                            print(f"[AI DEAL DESCRIPTION] product_id={product_id} generated and stored")
+                        else:
+                            print(f"[AI DEAL DESCRIPTION SKIP] product_id={product_id} generation failed, left stale")
+                    else:
+                        print(f"[AI DEAL DESCRIPTION SKIP] product_id={product_id} price changed but no price context available")
+                except Exception as ai_err:
+                    print(f"WARNING: could not generate/write ai_deal_description for product_id={product_id}: {ai_err}")
 
             return True, False, in_stock, None  # ✅ success
 
@@ -135,6 +161,7 @@ def process_products(conn, products):
                 product_id=product_id,
                 product_url=product_url,
                 scraped_at=scraped_at,
+                product=product,
             )
 
             if ok:

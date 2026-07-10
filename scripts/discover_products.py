@@ -134,6 +134,7 @@ def process_products(conn, products, fallback_category=None):
                 if text:
                     try:
                         update_ai_description(conn, product_id, text)
+                        print(f"[AI DESCRIPTION] sku={sku} generated and stored")
                     except Exception as ai_err:
                         print(f"WARNING: could not write ai_description for sku={sku}: {ai_err}")
                 else:

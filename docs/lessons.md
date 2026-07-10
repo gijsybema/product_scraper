@@ -178,3 +178,12 @@
 - **Small/cheap models (Haiku) don't reliably honor negative instructions ("never use word X") even when explicit.** A banned word still leaked through ~1 in 4 generations despite an explicit prohibition. Default to "ship and monitor" rather than chasing 100% prompt compliance on a cost-optimized model; escalate to a regex guard or a stronger model only if it's a recurring real-world issue.
 
 ---
+
+## T32 — Wire generate_ai_deal_description into scrape_price_history.py
+
+- **Reusing an established pattern (RETURNING clause for "previous state") kept the design decision cheap.** Applying T31's `RETURNING id, ai_description` approach to `upsert_price_history` (return previous price) avoided a second query and needed no new design discussion — the precedent did the work.
+- **An established isolation pattern doesn't propagate automatically — it has to be re-applied deliberately.** `update_ai_deal_description` was wrapped in try/except from the start (copying T31's verify fix), but `get_price_context`/`generate_ai_deal_description` right above it weren't — same task, same file, same rationale, just missed. Treat "wrap secondary/AI calls in their own try/except" as an implementation checklist item, not something verify alone should catch.
+- **Manual testing converged faster by working with reality instead of forcing it.** Early plans to edit specific DB rows and call `process_single_product` directly were dropped in favor of running the real `--limit N` pipeline and classifying results after the fact against a known prior scrape date — less setup, and it exercises the real commit/rollback/batching path.
+- **Manual testing surfaces a different class of issue than verify.** Missing success-path console logging and inconsistent price formatting in the generated text were both invisible to unit tests and code review — they only showed up from reading actual console output and generated Dutch text during the live run.
+
+---

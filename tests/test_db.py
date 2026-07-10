@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch, call
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD, get_price_context, update_ai_description, update_ai_deal_description
+from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD, get_price_context, update_ai_description, update_ai_deal_description, get_products_to_scrape
 
 
 # --- idempotency ---
@@ -28,6 +28,40 @@ def test_upsert_price_history_is_idempotent():
     source = inspect.getsource(upsert_price_history)
     assert "ON CONFLICT (product_id, scraped_at)" in source
     assert "DO UPDATE" in source
+
+def test_upsert_price_history_returns_previous_price():
+    # Caller needs the pre-upsert price to detect a change without a separate query.
+    source = inspect.getsource(upsert_price_history)
+    assert "RETURNING (SELECT price FROM prev)" in source
+
+    ctx, cur = _make_cursor((205.0,))
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    result = upsert_price_history(
+        conn, product_id=1, scraped_at=date(2026, 6, 26),
+        price=194.0, availability=True, rating=4.5, review_count=100,
+    )
+    assert result == 205.0
+
+def test_upsert_price_history_returns_none_for_first_row():
+    # No prior price row (new product) — RETURNING yields NULL.
+    ctx, cur = _make_cursor((None,))
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    result = upsert_price_history(
+        conn, product_id=1, scraped_at=date(2026, 6, 26),
+        price=194.0, availability=True, rating=4.5, review_count=100,
+    )
+    assert result is None
+
+
+# --- get_products_to_scrape ---
+
+def test_get_products_to_scrape_selects_name_brand_category():
+    # generate_ai_deal_description needs name/brand/category on the product dict.
+    source = inspect.getsource(get_products_to_scrape)
+    assert "p.id, p.product_url, p.name, p.brand, p.category" in source
+    assert "id, product_url, name, brand, category" in source
 
 
 # --- handle_product_404 ---

@@ -83,6 +83,7 @@ If verification cannot be completed (no prod DB access, UI interaction required,
 
 ## Error Handling Rules
 - In exception handlers, always wrap secondary operations (e.g. DB logging, run log writes) in their own try/except — a failure in the handler must never replace the original exception
+- When a task adds an AI-generation call inline after a primary DB write (e.g. the ai_description/ai_deal_description pattern), wrap the entire generate+write sequence in one try/except — not just the final write — so a failure anywhere in that sequence cannot cause a retry or misclassify the primary write's success/failure
 - Always initialise variables used in `finally` before the `try` block (`run_id = None`, `status = "failed"`, `success = 0`) — the summary or cleanup must be safe to execute on any crash path
 - When adding a `finally` to an existing `try`, check for `return`/`raise` inside the `try` first — they trigger `finally` and can produce misleading output if defaults are not set
 
