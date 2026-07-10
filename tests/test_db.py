@@ -1,11 +1,12 @@
 from pathlib import Path
 import sys
 import inspect
+from datetime import date
 from unittest.mock import MagicMock, patch, call
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD
+from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD, get_price_context
 
 
 # --- idempotency ---
@@ -118,3 +119,44 @@ def test_deactivate_if_long_term_oos_returns_false_when_already_inactive():
     conn = MagicMock()
     conn.cursor.side_effect = [ctx_select, ctx_update]
     assert deactivate_if_long_term_oos(conn, product_id=1) is False
+
+
+# --- get_price_context ---
+
+def test_get_price_context_returns_none_when_no_row():
+    # Product has no price_history rows at all.
+    ctx, _ = _make_cursor(None)
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    assert get_price_context(conn, product_id=1) is None
+
+def test_get_price_context_returns_none_when_no_distinct_previous_price():
+    # Price has never changed (or only one row exists) — previous_price is NULL.
+    row = (194.0, date(2026, 6, 1), None, 194.0, date(2026, 6, 1),
+           194.0, date(2026, 6, 1), 194.0, date(2026, 6, 1))
+    ctx, _ = _make_cursor(row)
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    assert get_price_context(conn, product_id=1) is None
+
+def test_get_price_context_drop_pct_positive_on_price_drop():
+    # current=194.0, previous=205.0 -> price dropped, drop_pct must be positive.
+    row = (194.0, date(2026, 6, 26), 205.0, 194.0, date(2026, 6, 1),
+           194.0, date(2026, 6, 1), 205.0, date(2026, 6, 8))
+    ctx, _ = _make_cursor(row)
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    result = get_price_context(conn, product_id=1)
+    assert result["price_diff"] == 11.0          # positive = price dropped
+    assert result["drop_pct"] == 5.37            # positive = price dropped, round((205-194)/205*100, 2)
+
+def test_get_price_context_drop_pct_negative_on_price_rise():
+    # current=85.0, previous=64.0 -> price rose, drop_pct must be negative.
+    row = (85.0, date(2026, 6, 26), 64.0, 64.0, date(2026, 6, 23),
+           64.0, date(2026, 6, 23), 85.0, date(2026, 5, 27))
+    ctx, _ = _make_cursor(row)
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    result = get_price_context(conn, product_id=1)
+    assert result["price_diff"] == -21.0          # negative = price rose, not dropped
+    assert result["drop_pct"] == -32.81           # negative = not a drop, round((64-85)/64*100, 2)

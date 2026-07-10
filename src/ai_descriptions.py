@@ -50,22 +50,32 @@ def generate_product_description(product: dict) -> str | None:
         return None
 
 
+def _build_deal_description_prompt(product: dict, price_context: dict) -> str:
+    ctx = price_context
+    return (
+        "Je bent een neutrale prijsanalist voor een Nederlandse prijsvergelijkingssite.\n\n"
+        "Schrijf 1-2 zinnen die de huidige prijssituatie van dit product samenvatten.\n"
+        "Noem alleen de meest opvallende feiten. Schrijf feitelijk, geen marketingtaal.\n"
+        "Gebruik alleen de tijdsperiodes en cijfers die hieronder gegeven zijn — verzin geen "
+        "andere tijdsperiodes, vergelijkingen of prijssegmenten.\n"
+        "Gebruik nooit de woorden 'minimum', 'maximum' of 'segment'. Beschrijf prijzen altijd "
+        "expliciet als 'laagste prijs' of 'hoogste prijs', eventueel met de tijdsperiode erbij "
+        "(bijv. 'de laagste prijs in 30 dagen').\n"
+        "Geef uitsluitend de 1-2 zinnen terug, zonder titel, kop of opsommingstekens.\n\n"
+        f"Product: {product.get('name', '')} ({product.get('brand', '')})\n"
+        f"Huidige prijs: €{ctx['current_price']} (sinds {ctx['current_price_since']})\n"
+        f"Vorige prijs: €{ctx['previous_price']} ({ctx['price_diff']:+.2f}, {ctx['drop_pct']:+.1f}%)\n"
+        f"Laagste prijs ooit: €{ctx['lowest_ever_price']} (op {ctx['lowest_ever_date']})\n"
+        f"30-daags laagste prijs: €{ctx['low_30d']} (op {ctx['low_30d_date']})\n"
+        f"30-daags hoogste prijs: €{ctx['high_30d']} (op {ctx['high_30d_date']})\n\n"
+        "Prijsanalyse:"
+    )
+
+
 def generate_ai_deal_description(product: dict, price_context: dict) -> str | None:
     """Generate 1–2 Dutch sentences summarising the current price situation. Returns None on failure."""
     try:
-        ctx = price_context
-        prompt = (
-            "Je bent een neutrale prijsanalist voor een Nederlandse prijsvergelijkingssite.\n\n"
-            "Schrijf 1-2 zinnen die de huidige prijssituatie van dit product samenvatten.\n"
-            "Noem alleen de meest opvallende feiten. Schrijf feitelijk, geen marketingtaal.\n\n"
-            f"Product: {product.get('name', '')} ({product.get('brand', '')})\n"
-            f"Huidige prijs: €{ctx['current_price']} (sinds {ctx['current_price_since']})\n"
-            f"Vorige prijs: €{ctx['previous_price']} ({ctx['price_diff']:+.2f}, {ctx['drop_pct']:+.1f}%)\n"
-            f"Laagste prijs ooit: €{ctx['lowest_ever_price']} (op {ctx['lowest_ever_date']})\n"
-            f"30-daags laagste prijs: €{ctx['low_30d']} (op {ctx['low_30d_date']})\n"
-            f"30-daags hoogste prijs: €{ctx['high_30d']} (op {ctx['high_30d_date']})\n\n"
-            "Prijsanalyse:"
-        )
+        prompt = _build_deal_description_prompt(product, price_context)
         response = _client().messages.create(
             model=_MODEL,
             max_tokens=120,
@@ -88,12 +98,30 @@ if __name__ == "__main__":
     load_dotenv(".env.local")
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 
-    from src.db import get_connection
+    from src.db import get_connection, get_price_context
 
     CATEGORIES = ["headphones", "earbuds", "speakers", "soundbars"]
 
+    # candidate product ids covering the 4 deal-description scenarios,
+    # picked manually from a live-DB diagnostic query during T29 planning
+    DEAL_SCENARIOS = {
+        "drop to all-time low": 2181,
+        "drop, not lowest": 119,
+        "price increase": 2180,
+        "small fluctuation": 2076,
+    }
+
+    def _print_result(text, usage):
+        cost = (usage.input_tokens / 1_000_000 * _COST_INPUT_PER_M
+                + usage.output_tokens / 1_000_000 * _COST_OUTPUT_PER_M)
+        print(text)
+        print(f"\n[tokens: {usage.input_tokens} in / {usage.output_tokens} out | cost: ${cost:.5f}]")
+
     conn = get_connection()
     try:
+        print(f"\n{'#'*60}")
+        print("# PRODUCT DESCRIPTIONS")
+        print(f"{'#'*60}")
         for cat in CATEGORIES:
             with conn.cursor() as cur:
                 cur.execute(
@@ -122,12 +150,42 @@ if __name__ == "__main__":
                     temperature=_TEMPERATURE,
                     messages=[{"role": "user", "content": _build_product_description_prompt(p)}],
                 )
-                text = response.content[0].text.strip()
-                u = response.usage
-                cost = (u.input_tokens / 1_000_000 * _COST_INPUT_PER_M
-                        + u.output_tokens / 1_000_000 * _COST_OUTPUT_PER_M)
-                print(text)
-                print(f"\n[tokens: {u.input_tokens} in / {u.output_tokens} out | cost: ${cost:.5f}]")
+                _print_result(response.content[0].text.strip(), response.usage)
+            except Exception as e:
+                print(f"[FAILED -- {e}]")
+
+        print(f"\n{'#'*60}")
+        print("# DEAL DESCRIPTIONS")
+        print(f"{'#'*60}")
+        for scenario, product_id in DEAL_SCENARIOS.items():
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT name, brand, category FROM products WHERE id = %s",
+                    (product_id,),
+                )
+                row = cur.fetchone()
+            if not row:
+                print(f"\n[WARN] product id {product_id} not found (scenario: {scenario})")
+                continue
+            p = {"name": row[0], "brand": row[1], "category": row[2]}
+            ctx = get_price_context(conn, product_id)
+            print(f"\n{'='*60}")
+            print(f"Scenario : {scenario}")
+            if not ctx:
+                print(f"Product  : {p['name']} ({p['brand']}) [id={product_id}]")
+                print("[WARN] get_price_context returned None — no distinct previous price]")
+                continue
+            prompt = _build_deal_description_prompt(p, ctx)
+            print(prompt)
+            print(f"{'─'*60}")
+            try:
+                response = _client().messages.create(
+                    model=_MODEL,
+                    max_tokens=120,
+                    temperature=_TEMPERATURE,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                _print_result(response.content[0].text.strip(), response.usage)
             except Exception as e:
                 print(f"[FAILED -- {e}]")
     finally:

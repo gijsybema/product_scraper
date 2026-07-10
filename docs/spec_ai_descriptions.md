@@ -89,8 +89,8 @@ Builds and sends the deal description prompt. Returns 1–2 Dutch sentences, or 
 - `current_price` — today's price
 - `current_price_since` — date today's price was first seen (i.e. when this price level started)
 - `previous_price` — most recent prior measurement before today
-- `price_diff` — absolute change (positive = drop, negative = rise)
-- `drop_pct` — percentage change (signed)
+- `price_diff` — absolute change (positive = price dropped, negative = price rose)
+- `drop_pct` — percentage change (positive = price dropped, negative = price rose)
 - `lowest_ever_price` — MIN(price) over all history
 - `lowest_ever_date` — date of that minimum
 - `low_30d` — MIN(price) over last 30 days
@@ -248,12 +248,28 @@ Implementation follows a two-stage preview gate before any DB writes are introdu
 |---|---|---|
 | ✅ | T27 | Schema migration: add `ai_description`, `ai_deal_description`, `ai_deal_description_updated_at` to `products`; write rollback; update `sql/schema.sql` |
 | ✅ | T28 | Implement `src/ai_descriptions.py`: `generate_product_description` and `generate_ai_deal_description` with shared API behaviour (model, tokens, temperature, error handling); preview product descriptions for one product per category (headphones, earbuds, speakers, soundbars); user reviews output before proceeding |
-| ⬜ | T29 | Implement `get_price_context` in `src/db.py`: write and verify SQL query against live data; preview deal descriptions with real DB data covering: price drop to all-time low, price drop (not lowest ever), price increase, small fluctuation; user reviews output before proceeding |
+| ✅ | T29 | Implement `get_price_context` in `src/db.py`: write and verify SQL query against live data; preview deal descriptions with real DB data covering: price drop to all-time low, price drop (not lowest ever), price increase, small fluctuation; user reviews output before proceeding |
 | ⬜ | T30 | Implement `update_ai_description` and `update_ai_deal_description` in `src/db.py` |
 | ⬜ | T31 | Wire `generate_product_description` into `discover_products.py`: call after upsert for NULL `ai_description` rows; add 0.5s rate-limit sleep; log outcomes — **add `ANTHROPIC_API_KEY` to Railway environment variables before deploying** |
 | ⬜ | T32 | Wire `generate_ai_deal_description` into `scrape_price_history.py`: detect price change after upsert; call `get_price_context` + `generate_ai_deal_description`; log outcomes — **verify `ANTHROPIC_API_KEY` is present in Railway environment** |
 | ⬜ | T33 | Backfill `ai_description` for all 800 existing products: run `discover_products.py --limit` in batches or a one-off script; verify no NULL rows remain |
 | ⬜ | T34 | Unit tests for `src/ai_descriptions.py`: mock the Anthropic client; test prompt construction, None-on-failure, and that no API calls are made when input is invalid |
+
+---
+
+## Known Limitation: Deal Description Wording (T29)
+
+During T29 preview, the deal description prompt explicitly bans the words "minimum", "maximum", and "segment" in favour of concrete phrasing ("laagste prijs in 30 dagen"). Claude Haiku follows this in most cases but not 100% reliably — in preview testing it slipped ("middensegment") in roughly 1 of 4 runs despite the explicit instruction. This is a known limitation of smaller/cheaper models with negative-instruction adherence, not a bug.
+
+**Decision:** ship as-is. Since `ai_deal_description` regenerates on every price change, an occasional awkward phrasing self-corrects on the next run. Risk accepted as low.
+
+**Options for later iteration, if this becomes a recurring quality issue in production:**
+
+1. **Post-processing regex guard** — after generation, check output for banned words and either retry once with a stronger reminder, or fall back to a simpler templated sentence. Cheap, deterministic.
+2. **Few-shot examples in the prompt** — add 1-2 example input/output pairs showing desired phrasing. Usually the most effective lever for steering small models; slightly higher input token cost (still negligible).
+3. **Structured output** — have the model fill specific slots instead of free text, reducing room to invent phrasing. More engineering, less natural-sounding text.
+4. **Stronger model for deal descriptions only** — Sonnet would likely follow the ban reliably at a higher per-call cost (still cheap at ~50/day volume).
+5. **Periodic spot-check in production** — monitor real output after T31/T32 ship; only invest further if quality issues are frequent.
 
 ---
 

@@ -343,3 +343,92 @@ def deactivate_if_long_term_oos(conn, product_id: int, threshold: int = OOS_DEAC
         return cur.fetchone() is not None
 
 
+def get_price_context(conn, product_id: int) -> Optional[dict]:
+    """
+    Assemble price context for the AI deal description prompt.
+
+    current_price_since is the start of the current unbroken price streak
+    (found via change-point detection over price_history, not just today's
+    date). Returns None if there is no distinct prior price to compare
+    against (new product, or price has never changed).
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH h AS (
+                SELECT
+                    scraped_at,
+                    price,
+                    CASE WHEN price = LAG(price) OVER (ORDER BY scraped_at)
+                         THEN 0 ELSE 1 END AS is_change
+                FROM price_history
+                WHERE product_id = %s
+            ),
+            grp AS (
+                SELECT scraped_at, price,
+                       SUM(is_change) OVER (ORDER BY scraped_at) AS grp_id
+                FROM h
+            ),
+            current_streak AS (
+                SELECT price AS current_price,
+                       MIN(scraped_at) AS current_price_since,
+                       MAX(scraped_at) AS latest_date
+                FROM grp
+                GROUP BY grp_id, price
+                ORDER BY latest_date DESC
+                LIMIT 1
+            )
+            SELECT
+                cs.current_price,
+                cs.current_price_since,
+                (SELECT price FROM price_history
+                 WHERE product_id = %s AND scraped_at < cs.current_price_since
+                 ORDER BY scraped_at DESC LIMIT 1) AS previous_price,
+                (SELECT MIN(price) FROM price_history WHERE product_id = %s) AS lowest_ever_price,
+                (SELECT MIN(scraped_at) FROM price_history
+                 WHERE product_id = %s
+                   AND price = (SELECT MIN(price) FROM price_history WHERE product_id = %s)) AS lowest_ever_date,
+                (SELECT price FROM price_history
+                 WHERE product_id = %s AND scraped_at >= cs.latest_date - INTERVAL '30 days'
+                 ORDER BY price ASC, scraped_at ASC LIMIT 1) AS low_30d,
+                (SELECT scraped_at FROM price_history
+                 WHERE product_id = %s AND scraped_at >= cs.latest_date - INTERVAL '30 days'
+                 ORDER BY price ASC, scraped_at ASC LIMIT 1) AS low_30d_date,
+                (SELECT price FROM price_history
+                 WHERE product_id = %s AND scraped_at >= cs.latest_date - INTERVAL '30 days'
+                 ORDER BY price DESC, scraped_at ASC LIMIT 1) AS high_30d,
+                (SELECT scraped_at FROM price_history
+                 WHERE product_id = %s AND scraped_at >= cs.latest_date - INTERVAL '30 days'
+                 ORDER BY price DESC, scraped_at ASC LIMIT 1) AS high_30d_date
+            FROM current_streak cs
+            """,
+            (product_id,) * 9,
+        )
+        row = cur.fetchone()
+
+    if row is None or row[2] is None:
+        return None
+
+    (current_price, current_price_since, previous_price, lowest_ever_price,
+     lowest_ever_date, low_30d, low_30d_date, high_30d, high_30d_date) = row
+
+    current_price = float(current_price)
+    previous_price = float(previous_price)
+    price_diff = previous_price - current_price  # positive = price dropped
+    drop_pct = round((previous_price - current_price) / previous_price * 100, 2) if previous_price else 0.0  # positive = price dropped
+
+    return {
+        "current_price": current_price,
+        "current_price_since": current_price_since,
+        "previous_price": previous_price,
+        "price_diff": price_diff,
+        "drop_pct": drop_pct,
+        "lowest_ever_price": float(lowest_ever_price),
+        "lowest_ever_date": lowest_ever_date,
+        "low_30d": float(low_30d),
+        "low_30d_date": low_30d_date,
+        "high_30d": float(high_30d),
+        "high_30d_date": high_30d_date,
+    }
+
+

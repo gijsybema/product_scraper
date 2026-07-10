@@ -169,3 +169,12 @@
 - **Stage previews before wiring to DB.** Reviewing real API output for all 4 categories before T30/T31 confirmed tone and content quality. Cheaper to adjust a prompt string than to rewrite pipeline wiring after the fact.
 
 ---
+
+## T29 — Implement get_price_context in src/db.py
+
+- **Sign-convention decisions deserve an explicit, single source of truth before coding.** `price_diff` and `drop_pct` briefly ended up with opposite sign conventions because each was decided in a separate exchange without cross-checking the other. Next time a task has two related signed fields, settle both conventions together, or derive one from the other, so they can't drift apart.
+- **Change-point detection (LAG + cumulative SUM) is more robust than date-diffing for "since when has X held."** Computing `current_price_since` via an `is_change` flag + windowed `SUM` correctly handles gaps and repeated values without assuming daily-contiguous data. Reusable pattern for any "how long has this state held" query.
+- **Printing the actual prompt (not a paraphrased summary) in preview tooling made prompt iteration much faster.** Once `__main__` printed `_build_deal_description_prompt()`'s real output instead of a hand-formatted context line, spotting exactly which instruction wording needed tightening became immediate instead of guesswork.
+- **Small/cheap models (Haiku) don't reliably honor negative instructions ("never use word X") even when explicit.** A banned word still leaked through ~1 in 4 generations despite an explicit prohibition. Default to "ship and monitor" rather than chasing 100% prompt compliance on a cost-optimized model; escalate to a regex guard or a stronger model only if it's a recurring real-world issue.
+
+---
