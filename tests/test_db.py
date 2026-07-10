@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch, call
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD, get_price_context
+from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD, get_price_context, update_ai_description, update_ai_deal_description
 
 
 # --- idempotency ---
@@ -160,3 +160,35 @@ def test_get_price_context_drop_pct_negative_on_price_rise():
     result = get_price_context(conn, product_id=1)
     assert result["price_diff"] == -21.0          # negative = price rose, not dropped
     assert result["drop_pct"] == -32.81           # negative = not a drop, round((64-85)/64*100, 2)
+
+
+# --- update_ai_description / update_ai_deal_description ---
+
+def test_update_ai_description_sql():
+    source = inspect.getsource(update_ai_description)
+    assert "UPDATE products" in source
+    assert "ai_description = %s" in source
+    assert "WHERE id = %s" in source
+
+def test_update_ai_description_executes_with_correct_params():
+    ctx, cur = _make_cursor(None)
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    update_ai_description(conn, product_id=1, text="een tekst")
+    args, _ = cur.execute.call_args
+    assert args[1] == ("een tekst", 1)
+
+def test_update_ai_deal_description_sql():
+    source = inspect.getsource(update_ai_deal_description)
+    assert "UPDATE products" in source
+    assert "ai_deal_description = %s" in source
+    assert "ai_deal_description_updated_at = NOW()" in source
+    assert "WHERE id = %s" in source
+
+def test_update_ai_deal_description_executes_with_correct_params():
+    ctx, cur = _make_cursor(None)
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    update_ai_deal_description(conn, product_id=1, text="prijs daalde")
+    args, _ = cur.execute.call_args
+    assert args[1] == ("prijs daalde", 1)
