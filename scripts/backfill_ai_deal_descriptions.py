@@ -29,7 +29,7 @@ load_dotenv(".env.local")  # needed here because DATABASE_URL is often set manua
                             # (bypassing src.config's own load_dotenv) for prod runs
 
 from src.db import get_connection, get_price_context, update_ai_deal_description, create_scrape_run, finish_scrape_run
-from src.ai_descriptions import generate_ai_deal_description
+from src.ai_descriptions import generate_ai_deal_description, get_total_cost
 
 
 def get_products_missing_deal_description(conn, limit=None):
@@ -132,6 +132,7 @@ def main():
         print(f"skipped (generation fail) : {skipped_generation_failed}")
         print(f"remaining NULL            : {remaining_null}")
         print("===================")
+        print(f"[AI COST TOTAL] this run: ${get_total_cost():.5f}")
 
         conn.close()
 

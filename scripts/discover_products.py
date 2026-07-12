@@ -29,7 +29,7 @@ from src.coolblue_discovery import get_all_coolblue_products
 from src.coolblue_product_scraping import scrape_product_details, CoolblueBlockedError
 from src.db import get_connection, upsert_product, update_ai_description, create_scrape_run, finish_scrape_run
 from src.utils import print_progress, validate_product_details, generate_slug
-from src.ai_descriptions import generate_product_description
+from src.ai_descriptions import generate_product_description, get_total_cost
 
 CATEGORY_URLS = {
     "headphones": "https://www.coolblue.nl/hoofdtelefoons/filter",
@@ -248,6 +248,8 @@ def main():
             print(f"  {r['category']:<12} status={r['status']} total={r['total']} success={r['success']} failed={r['failed']} skipped={r['skipped']} blocked={r['blocked']}")
         print(f"  total duration : {total_duration:.1f}s")
         print("==============================")
+
+    print(f"[AI COST TOTAL] this run: ${get_total_cost():.5f}")
 
 
 if __name__ == "__main__":

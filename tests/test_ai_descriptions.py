@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import src.ai_descriptions as ai_descriptions
 from src.ai_descriptions import (
     _fmt_price,
     _fmt_price_diff,
@@ -40,6 +41,8 @@ def _mock_client(text="Gegenereerde tekst."):
     client = MagicMock()
     response = MagicMock()
     response.content = [MagicMock(text=text)]
+    response.usage.input_tokens = 400
+    response.usage.output_tokens = 100
     client.messages.create.return_value = response
     return client
 
@@ -167,3 +170,21 @@ def test_generate_product_description_empty_specs_skips_api_call():
         result = generate_product_description(product)
     assert result is None
     client.messages.create.assert_not_called()
+
+
+# --- cost tracking ---
+
+def test_get_total_cost_accumulates_across_calls():
+    ai_descriptions._total_cost = 0.0
+    with patch("src.ai_descriptions._client", return_value=_mock_client()):
+        generate_product_description(_PRODUCT)
+        generate_product_description(_PRODUCT)
+    per_call = (400 / 1_000_000) * ai_descriptions._COST_INPUT_PER_M + (100 / 1_000_000) * ai_descriptions._COST_OUTPUT_PER_M
+    assert ai_descriptions.get_total_cost() == per_call * 2
+
+def test_get_total_cost_unaffected_by_skipped_generation():
+    ai_descriptions._total_cost = 0.0
+    product = {**_PRODUCT, "specs": None}
+    with patch("src.ai_descriptions._client", return_value=_mock_client()):
+        generate_product_description(product)
+    assert ai_descriptions.get_total_cost() == 0.0

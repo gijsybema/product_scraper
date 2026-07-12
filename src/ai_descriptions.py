@@ -11,12 +11,28 @@ logger = logging.getLogger(__name__)
 
 _MODEL = "claude-haiku-4-5-20251001"
 _TEMPERATURE = 0.3
-_COST_INPUT_PER_M = 0.80   # USD per million input tokens
-_COST_OUTPUT_PER_M = 4.00  # USD per million output tokens
+_COST_INPUT_PER_M = 1.00   # USD per million input tokens
+_COST_OUTPUT_PER_M = 5.00  # USD per million output tokens
 
 
 def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic()
+
+
+_total_cost = 0.0
+
+
+def get_total_cost() -> float:
+    """Running total (USD) of all generation calls made in this process."""
+    return _total_cost
+
+
+def _log_usage(kind: str, name: str, usage) -> None:
+    global _total_cost
+    cost = (usage.input_tokens / 1_000_000 * _COST_INPUT_PER_M
+            + usage.output_tokens / 1_000_000 * _COST_OUTPUT_PER_M)
+    _total_cost += cost
+    print(f"[AI COST] {kind} name=\"{name}\" tokens_in={usage.input_tokens} tokens_out={usage.output_tokens} cost=${cost:.5f}")
 
 
 def _build_product_description_prompt(product: dict) -> str:
@@ -51,6 +67,7 @@ def generate_product_description(product: dict) -> str | None:
             temperature=_TEMPERATURE,
             messages=[{"role": "user", "content": _build_product_description_prompt(product)}],
         )
+        _log_usage("product_description", product.get("name", ""), response.usage)
         return response.content[0].text.strip()
     except Exception as e:
         logger.warning("generate_product_description failed: %s", e)
@@ -104,6 +121,7 @@ def generate_ai_deal_description(product: dict, price_context: dict) -> str | No
             temperature=_TEMPERATURE,
             messages=[{"role": "user", "content": prompt}],
         )
+        _log_usage("deal_description", product.get("name", ""), response.usage)
         return response.content[0].text.strip()
     except Exception as e:
         logger.warning("generate_ai_deal_description failed: %s", e)

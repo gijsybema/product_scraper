@@ -36,7 +36,7 @@ except ImportError:
 from src.db import get_connection, upsert_price_history, get_products_to_scrape, get_price_context, update_ai_deal_description
 from src.db import create_scrape_run, finish_scrape_run, handle_product_404, reset_404_count, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD
 from src.coolblue_product_scraping import scrape_product_facts
-from src.ai_descriptions import generate_ai_deal_description
+from src.ai_descriptions import generate_ai_deal_description, get_total_cost
 from src.utils import print_progress, validate_price_facts
 from scripts.detect_drops import run_detect_drops
 
@@ -352,6 +352,7 @@ def main():
         print(f"deactivated : {deactivated}")
         print(f"duration    : {duration:.1f}s")
         print("===================")
+        print(f"[AI COST TOTAL] this run: ${get_total_cost():.5f}")
 
         if not args.missed_only:
             try:

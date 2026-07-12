@@ -214,11 +214,50 @@ anthropic>=0.40.0
 
 | Use case | Frequency | Input tokens (est.) | Output tokens (est.) | Cost (est.) |
 |---|---|---|---|---|
-| Product descriptions (backfill) | Once, 800 products | ~400/product | ~100/product | ~$0.06 one-time |
+| Product descriptions (backfill) | Once, 800 products | ~400/product | ~100/product | ~$0.72 one-time |
 | Product descriptions (ongoing) | ~5–10 new/week | ~400 | ~100 | negligible |
-| Deal descriptions | ~20–50/day | ~250 | ~60 | ~$0.003/day |
+| Deal descriptions | ~20–50/day | ~250 | ~60 | ~$0.01–0.03/day |
 
-Haiku pricing: $0.80/M input tokens, $4.00/M output tokens (as of June 2026).
+Haiku pricing: $1.00/M input tokens, $5.00/M output tokens (as of July 2026).
+
+See "Cost Considerations" below for actual measured cost from the T33+T35 backfill.
+
+---
+
+## Cost Considerations
+
+**Actual measured cost (T33 + T35 backfill, 2026-07-12):** $1.53 for ~1,548 calls
+(~828 product descriptions + ~720 deal descriptions), per Anthropic's usage
+dashboard — about 2x the naive per-call estimate above. Real prompts ran
+longer than the flat token estimate, mainly because formatted `specs` blocks
+vary a lot in size product to product.
+
+**Ongoing cost is a real line item, not negligible, for a pre-revenue project.**
+Deal descriptions alone could run roughly €20–40/year at sales-event volumes
+(100+ price changes/day), on top of whatever product-description generation
+continues to cost as new products are discovered. For a project with no
+revenue yet, a few euros a month for one feature is worth optimizing, not
+dismissing — revisit this once there's time to focus on it specifically.
+
+**Cost visibility:** every `generate_product_description`/`generate_ai_deal_description`
+call now logs `[AI COST] ...` with tokens in/out and USD cost
+(`src/ai_descriptions.py`), and every script that calls them prints an
+`[AI COST TOTAL]` for the whole run. Use this instead of estimating — actual
+spend is directly observable in each script's own output.
+
+**Cost-cutting options to evaluate later** (not scoped now — revisit as a
+dedicated task):
+- Anthropic's Message Batches API (flat 50% discount, async) for any future
+  large one-off backfill
+- A cheaper/smaller model for deal descriptions specifically (shorter output,
+  more templated structure — may tolerate a lower-tier model better than
+  product descriptions do)
+- Shortening the prompt itself (the banned-word instructions and full price
+  context block add fixed overhead to every call)
+- Skipping regeneration for very small price changes (e.g. <1%) where the
+  deal description wouldn't meaningfully change
+- Templating instead of generating for the most common/predictable cases,
+  falling back to AI generation only for edge cases
 
 ---
 
