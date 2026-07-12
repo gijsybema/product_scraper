@@ -36,8 +36,15 @@ def _build_product_description_prompt(product: dict) -> str:
 
 
 def generate_product_description(product: dict) -> str | None:
-    """Generate a 2–3 sentence Dutch product description. Returns None on failure."""
+    """Generate a 2–3 sentence Dutch product description. Returns None on failure.
+
+    Skips generation (no API call) when specs is missing/empty — without
+    structured specs there's nothing to ground the description in, risking
+    hallucinated details.
+    """
     try:
+        if not product.get("specs"):
+            return None
         response = _client().messages.create(
             model=_MODEL,
             max_tokens=200,

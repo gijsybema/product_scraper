@@ -252,8 +252,23 @@ Implementation follows a two-stage preview gate before any DB writes are introdu
 | ✅ | T30 | Implement `update_ai_description` and `update_ai_deal_description` in `src/db.py` |
 | ✅ | T31 | Wire `generate_product_description` into `discover_products.py`: call after upsert for NULL `ai_description` rows; add 0.5s rate-limit sleep; log outcomes — **add `ANTHROPIC_API_KEY` to Railway environment variables before deploying** |
 | ✅ | T32 | Wire `generate_ai_deal_description` into `scrape_price_history.py`: detect price change after upsert; call `get_price_context` + `generate_ai_deal_description`; log outcomes — **verify `ANTHROPIC_API_KEY` is present in Railway environment** |
-| ⬜ | T33 | Backfill `ai_description` for all 800 existing products: run `discover_products.py --limit` in batches or a one-off script; verify no NULL rows remain |
-| ⬜ | T34 | Unit tests for `src/ai_descriptions.py`: mock the Anthropic client; test prompt construction, None-on-failure, and that no API calls are made when input is invalid |
+| ✅ | T33 | Backfill `ai_description` for all 800 existing products: run `discover_products.py --limit` in batches or a one-off script; verify no NULL rows remain |
+| ✅ | T34 | Unit tests for `src/ai_descriptions.py`: mock the Anthropic client; test prompt construction, None-on-failure, and that no API calls are made when input is invalid |
+| ✅ | T35 | One-off backfill `ai_deal_description` for products with a genuine price change already in history: new script `scripts/backfill_ai_deal_descriptions.py` using existing `get_price_context` + `generate_ai_deal_description`; skips products with no real price change (no context to generate from); needed to seed deal descriptions for frontend development ahead of the next natural price-change cycle |
+| ✅ | T36 | `generate_product_description` skips generation (returns `None`, no API call) when `specs` is `None`/empty — avoids hallucinated product copy with no factual grounding; reset the already-affected prod rows (`ai_description` generated from empty `specs`) back to `NULL` so they self-correct once real specs are scraped |
+| ⬜ | T37 | Verify in production that `scrape_price_history.py` actually regenerates `ai_deal_description` on a real price change: manually trigger `scrape_price_history.py --limit N` (e.g. 50) from the Railway dashboard; query prod for `ai_deal_description_updated_at` within the run's timeframe; cross-check those product IDs against `price_history` to confirm a genuine price change occurred, not just that the column was touched — see below for the full procedure |
+
+---
+
+## T37 Procedure: Verifying `ai_deal_description` regeneration in production
+
+Unlike T31 (verifiable on demand — `discover_products.py --limit N` triggered manually always hits products), T32's regeneration only fires when a product's price actually changed since the last scrape, so it can't be forced on a specific run. To confirm the live wiring works in production:
+
+1. Manually trigger `scrape_price_history.py --limit N` from the Railway dashboard, using a larger N (e.g. 50) since price changes are not guaranteed on any given day.
+2. Query prod for `ai_deal_description_updated_at >= NOW() - INTERVAL '1 hour'` (or the run's timeframe) to find products touched by that run.
+3. Cross-check those product IDs against `price_history` to confirm the price genuinely differs from the prior day's row — this proves the trigger condition (price change detected) matched reality, not just that the column was touched.
+
+If no products in the sample had a price change, the run proves nothing either way — retry with a larger `--limit` or wait for a regular daily cron run and repeat the same check afterward.
 
 ---
 

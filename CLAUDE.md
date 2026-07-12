@@ -25,7 +25,7 @@
 - When writing Coolblue parsers: anchor selectors on stable identifiers (section id, aria-label, heading text content) — never on generated CSS class names (css-*), which change between deploys
 - When running inspect_product_page.py for parser recon: if the specs output contains two `Artikelnummer` rows or duplicate Dutch labels, the URL is a bundle page — use a single-product URL instead to ensure the key mapping covers only one product's spec structure
 - Never modify `docs/spec.md` without explicit user confirmation; always show proposed changes and wait for approval
-- Before implementing a SQL check that depends on a minimum row count (e.g. `COUNT(...) >= N` in a time window): run a diagnostic query against the live DB to verify actual data density before finalising N
+- Before implementing a SQL check that depends on a minimum row count (e.g. `COUNT(...) >= N` in a time window), or before finalizing the scope of a one-off backfill/data-fix script: run a diagnostic query against the live DB to verify actual data density / affected-row count first
 
 
 ## Output Style
@@ -86,6 +86,7 @@ If verification cannot be completed (no prod DB access, UI interaction required,
 - When a task adds an AI-generation call inline after a primary DB write (e.g. the ai_description/ai_deal_description pattern), wrap the entire generate+write sequence in one try/except — not just the final write — so a failure anywhere in that sequence cannot cause a retry or misclassify the primary write's success/failure
 - Always initialise variables used in `finally` before the `try` block (`run_id = None`, `status = "failed"`, `success = 0`) — the summary or cleanup must be safe to execute on any crash path
 - When adding a `finally` to an existing `try`, check for `return`/`raise` inside the `try` first — they trigger `finally` and can produce misleading output if defaults are not set
+- When changing what a shared function's return value means (e.g. a new reason to return `None`), check all existing callers that branch on it — a caller's local success/failure counters or operational status reporting may now miscategorize a previously-impossible case
 
 ## Validation Rules
 - Validation functions return `(bool, list[str])` — a valid flag and a list of human-readable error reasons
@@ -103,6 +104,7 @@ If verification cannot be completed (no prod DB access, UI interaction required,
 - On Windows, if a new HTTPS dependency fails with SSL cert errors in the venv: `pip install truststore` and call `truststore.inject_into_ssl()` before the first request. Not needed on Railway.
   - In scripts that also run on Railway (not just local `__main__` blocks), guard the import with `try: import truststore; truststore.inject_into_ssl() \ except ImportError: pass` instead of adding it to `requirements.txt` — keeps the Railway cron job unaffected by a package it doesn't have.
 - For modules with external API calls worth manually reviewing, add a `__main__` block instead of a separate script — no path hacks, runs with `python src/module.py`, lives with the code.
+- When a script sets `DATABASE_URL` manually to run against prod locally (per the README's manual-prod pattern), `get_connection()` skips its normal `src.config` import, so `.env.local` never loads automatically. Any such script that also needs other `.env.local` vars (e.g. `ANTHROPIC_API_KEY`) must call `load_dotenv(".env.local")` explicitly near the top.
 
 ## Testing Conventions
 - One test file per source module: `tests/test_utils.py` → `src/utils.py`, `tests/test_db.py` → `src/db.py`

@@ -187,3 +187,12 @@
 - **Manual testing surfaces a different class of issue than verify.** Missing success-path console logging and inconsistent price formatting in the generated text were both invisible to unit tests and code review — they only showed up from reading actual console output and generated Dutch text during the live run.
 
 ---
+
+## T33–T36 — Backfill scripts, unit tests, and the empty-specs hallucination guard
+
+- **Backfills should read from already-stored columns, not re-scrape.** `generate_product_description` only needs `name`/`brand`/`category`/`description`/`specs` — all already on the `products` row — so the backfill script never touched the network. This also let it reach the 92 inactive/discontinued products that `discover_products.py`'s live category crawl could never re-visit.
+- **Setting `DATABASE_URL` manually to point a local script at prod silently skips `.env.local` loading.** `get_connection()` only imports `src.config` (which calls `load_dotenv`) when `DATABASE_URL` isn't already set — the README's manual-prod pattern bypasses that entirely. First surfaced as a cryptic Anthropic auth error on T33's first prod dry run; any future manual-prod script needing other `.env.local` vars needs its own explicit `load_dotenv` call.
+- **Query live prod state before assuming a pipeline works.** Checking `scrape_runs` + a raw `COUNT(ai_description)` revealed the real explanation for "0/828 populated despite a successful discover_products run" was an undeployed feature, not a bug — avoided chasing a phantom issue in already-correct code.
+- **A shared function's return-value contract can silently gain new meanings.** T36 made `generate_product_description` return `None` for both "API failed" and "correctly skipped, no specs." `backfill_ai_descriptions.py`, written before T36, still lumps both into one `skipped` counter — worth checking all existing callers whenever a shared function's failure semantics expand, not just the caller being actively edited.
+
+---
