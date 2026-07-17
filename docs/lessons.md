@@ -238,3 +238,12 @@
 - **Test against production before deploying, not just after.** The README's `DATABASE_URL`-override pattern let the exact uncommitted working-tree code run against the real Railway DB, catching the commit-boundary issue before it was ever pushed — cheaper than finding it live in a Railway cron run.
 - **A function's home is decided by its role, not by which feature added it.** `store_embedding` initially landed in `embeddings.py` because that's where the embeddings feature was being built, but it's a DB write — it belongs in `db.py` next to `update_ai_description`, regardless of which spec introduced it.
 - **A real production write-and-verify beats mocking when the target env has a documented gotcha.** The manual-prod `DATABASE_URL` pattern silently skips `.env.local` loading (already known from T_E2's lesson) — running the actual script against real data confirmed both the fix and the env-var workaround at once, rather than trusting each in isolation.
+
+---
+
+## T_E4 — Implement scripts/backfill_embeddings.py
+
+- **Mirroring the closest sibling script made implementation nearly copy-paste.** `backfill_ai_descriptions.py` provided the exact shape (CLI args, `scrape_runs` logging, summary format, error handling) — checking for the nearest existing precedent before designing a new script from scratch paid off again.
+- **Free dry-run testing at full scale, not just a small `--limit` sample, is worth doing whenever it's available.** The full 698-row dry-run caught an encoding bug and confirmed R-7's sparse-embedding case actually occurs (22/698 products) — both before any real money or production writes happened. A 5-row sample wouldn't have surfaced either.
+- **Cross-checking a design decision against its actual downstream consumer beats assuming consistency.** The `active = true` scoping question was resolved by confirming `price-tracker-web`'s semantic-search query already filters `active = true` too — the design was already coherent end-to-end, but that required checking, not assuming.
+- **A real-but-pre-existing verify finding deserves its own tracked task, not a silent fix or a shrug.** The `KeyboardInterrupt`/`scrape_runs` gap wasn't a regression from this task, but it was real and repeatable across scripts — spinning it into T33 kept T_E4 focused while not losing the finding.

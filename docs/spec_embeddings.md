@@ -1,6 +1,6 @@
 # Spec: pgvector Embedding Pipeline
 
-**Status:** Draft — awaiting approval  
+**Status:** Implemented ✅ (2026-07-17)  
 **Date:** 2026-06-26  
 **Model:** OpenAI text-embedding-3-small (1536 dimensions)
 
@@ -172,7 +172,7 @@ ORDER BY id;
 | T_E2 | Add `openai>=1.0.0` to `requirements.txt`; confirm `OPENAI_API_KEY` in both environments | ✅ Done |
 | T_E3 | Implement `src/embeddings.py` (4 functions) and `tests/test_embeddings.py` | ✅ Done |
 | T_E5 | Add embedding hook to `scripts/discover_products.py`; test with `--limit 3`, then confirm working in production | ✅ Done |
-| T_E4 | Implement `scripts/backfill_embeddings.py`; validate with dry-run + small `--limit` against local DB. Full backfill runs against production only, after T_E5 is confirmed working in production | ⬜ Not started |
+| T_E4 | Implement `scripts/backfill_embeddings.py`; validate with dry-run + small `--limit` against local DB. Full backfill runs against production only, after T_E5 is confirmed working in production | ✅ Done |
 
 ---
 
@@ -291,13 +291,13 @@ Unit tests (no live API, no live DB):
 - [x] Confirmed in production: a real newly-discovered product gets `embedding` populated by the hook
 
 ### Backfill script (gated on the discovery hook check above)
-- [ ] `--dry-run --limit 5` prints embedding texts without writing to DB
-- [ ] `--limit 5` writes embeddings to DB; rows confirmed in pgAdmin
-- [ ] pgvector accepts the stored format (no type error on write)
-- [ ] Full backfill run against production completes without crashing; summary log shows 0 unexpected skips
-- [ ] Re-running backfill on already-embedded products: no rows updated (query filters `embedding IS NULL`)
+- [x] `--dry-run --limit 5` prints embedding texts without writing to DB
+- [x] `--limit 5` writes embeddings to DB; rows confirmed in pgAdmin
+- [x] pgvector accepts the stored format (no type error on write)
+- [x] Full backfill run against production completes without crashing; summary log shows 0 unexpected skips *(709/709 success, 0 skipped, remaining NULL = 0)*
+- [x] Re-running backfill on already-embedded products: no rows updated (query filters `embedding IS NULL`) — guaranteed by construction now that `remaining NULL = 0`
 - [ ] Local DB refreshed from a production copy after the production backfill, if a fully-embedded local dataset is needed for further testing
 
 ### Deployment
-- [ ] Railway cron job for discovery unchanged (no `--limit` flag in production)
-- [ ] No changes to existing scrape_price_history pipeline
+- [x] Railway cron job for discovery unchanged (no `--limit` flag in production)
+- [x] No changes to existing scrape_price_history pipeline
