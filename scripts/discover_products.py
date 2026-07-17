@@ -34,9 +34,10 @@ except AttributeError:
 
 from src.coolblue_discovery import get_all_coolblue_products
 from src.coolblue_product_scraping import scrape_product_details, CoolblueBlockedError
-from src.db import get_connection, upsert_product, update_ai_description, create_scrape_run, finish_scrape_run
+from src.db import get_connection, upsert_product, update_ai_description, create_scrape_run, finish_scrape_run, store_embedding
 from src.utils import print_progress, validate_product_details, generate_slug
 from src.ai_descriptions import generate_product_description, get_total_cost
+from src.embeddings import build_embedding_text, generate_embedding, get_total_cost as get_embedding_cost
 
 CATEGORY_URLS = {
     "headphones": "https://www.coolblue.nl/hoofdtelefoons/filter",
@@ -147,6 +148,34 @@ def process_products(conn, products, fallback_category=None):
                 else:
                     print(f"[AI DESCRIPTION SKIP] sku={sku} generation failed, left NULL")
 
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, name, brand, category, specs, ai_description "
+                    "FROM products WHERE id = %s AND embedding IS NULL",
+                    (product_id,),
+                )
+                embedding_row = cur.fetchone()
+
+            if embedding_row:
+                try:
+                    emb_product = {
+                        "name": embedding_row[1],
+                        "brand": embedding_row[2],
+                        "category": embedding_row[3],
+                        "specs": embedding_row[4],
+                        "ai_description": embedding_row[5],
+                    }
+                    text = build_embedding_text(emb_product)
+                    embedding = generate_embedding(text)
+                    time.sleep(0.1)  # rate limit
+                    if embedding:
+                        store_embedding(conn, product_id, embedding)
+                        print(f"[EMBEDDING] sku={sku} generated and stored ({len(embedding)} dims)")
+                    else:
+                        print(f"[EMBEDDING SKIP] sku={sku} generation failed, left NULL")
+                except Exception as emb_err:
+                    print(f"WARNING: could not generate/store embedding for sku={sku}: {emb_err}")
+
             total_iter_time += time.time() - iter_start
             success += 1
             consecutive_403s = 0
@@ -256,7 +285,9 @@ def main():
         print(f"  total duration : {total_duration:.1f}s")
         print("==============================")
 
-    print(f"[AI COST TOTAL] this run: ${get_total_cost():.5f}")
+    ai_cost = get_total_cost()
+    embedding_cost = get_embedding_cost()
+    print(f"[COST TOTAL] this run: ${ai_cost + embedding_cost:.5f} (ai=${ai_cost:.5f}, embedding=${embedding_cost:.5f})")
 
 
 if __name__ == "__main__":

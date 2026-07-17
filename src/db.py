@@ -485,3 +485,17 @@ def update_ai_deal_description(conn, product_id: int, text: str) -> None:
         )
 
 
+def format_embedding_for_pg(embedding: list[float]) -> str:
+    """Format an embedding as the `[n1,n2,...]` string literal pgvector expects."""
+    return "[" + ",".join(str(x) for x in embedding) + "]"
+
+
+def store_embedding(conn, product_id: int, embedding: list[float]) -> None:
+    """Set products.embedding. Does not commit — caller is responsible."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE products SET embedding = %s WHERE id = %s",
+            (format_embedding_for_pg(embedding), product_id),
+        )
+
+

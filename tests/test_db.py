@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch, call
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD, get_price_context, update_ai_description, update_ai_deal_description, get_products_to_scrape
+from src.db import upsert_product, upsert_price_history, handle_product_404, reset_404_count, CONSECUTIVE_404_THRESHOLD, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD, get_price_context, update_ai_description, update_ai_deal_description, get_products_to_scrape, format_embedding_for_pg, store_embedding
 
 
 # --- idempotency ---
@@ -231,3 +231,30 @@ def test_update_ai_deal_description_executes_with_correct_params():
     update_ai_deal_description(conn, product_id=1, text="prijs daalde")
     args, _ = cur.execute.call_args
     assert args[1] == ("prijs daalde", 1)
+
+
+# --- format_embedding_for_pg / store_embedding ---
+
+def test_format_embedding_for_pg_produces_bracketed_string():
+    assert format_embedding_for_pg([0.1, -0.2, 3.0]) == "[0.1,-0.2,3.0]"
+
+def test_store_embedding_sql():
+    source = inspect.getsource(store_embedding)
+    assert "UPDATE products" in source
+    assert "embedding = %s" in source
+    assert "WHERE id = %s" in source
+
+def test_store_embedding_executes_with_correct_params():
+    ctx, cur = _make_cursor(None)
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    store_embedding(conn, product_id=1, embedding=[0.1, 0.2])
+    args, _ = cur.execute.call_args
+    assert args[1] == ("[0.1,0.2]", 1)
+
+def test_store_embedding_does_not_commit():
+    ctx, cur = _make_cursor(None)
+    conn = MagicMock()
+    conn.cursor.return_value = ctx
+    store_embedding(conn, product_id=1, embedding=[0.1, 0.2])
+    conn.commit.assert_not_called()

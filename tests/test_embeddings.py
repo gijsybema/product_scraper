@@ -6,11 +6,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import openai
 
+import src.embeddings as embeddings_module
 from src.embeddings import (
     build_embedding_text,
     generate_embedding,
-    format_embedding_for_pg,
-    store_embedding,
+    get_total_cost,
 )
 
 _PRODUCT = {
@@ -22,10 +22,11 @@ _PRODUCT = {
 }
 
 
-def _mock_client(embedding=None):
+def _mock_client(embedding=None, total_tokens=10):
     client = MagicMock()
     response = MagicMock()
     response.data = [MagicMock(embedding=embedding or [0.1, 0.2, 0.3])]
+    response.usage.total_tokens = total_tokens
     client.embeddings.create.return_value = response
     return client
 
@@ -59,12 +60,6 @@ def test_build_embedding_text_excludes_price():
     assert "149,99" not in text
 
 
-# --- format_embedding_for_pg ---
-
-def test_format_embedding_for_pg_produces_bracketed_string():
-    assert format_embedding_for_pg([0.1, -0.2, 3.0]) == "[0.1,-0.2,3.0]"
-
-
 # --- generate_embedding ---
 
 def test_generate_embedding_returns_vector():
@@ -79,17 +74,8 @@ def test_generate_embedding_returns_none_on_openai_error():
         result = generate_embedding("some text")
     assert result is None
 
-
-# --- store_embedding ---
-
-def test_store_embedding_issues_update_and_commits():
-    conn = MagicMock()
-    cursor = MagicMock()
-    conn.cursor.return_value.__enter__.return_value = cursor
-
-    store_embedding(conn, 42, [0.1, 0.2])
-
-    args, _ = cursor.execute.call_args
-    assert "UPDATE products SET embedding" in args[0]
-    assert args[1] == ("[0.1,0.2]", 42)
-    conn.commit.assert_called_once()
+def test_generate_embedding_accumulates_cost():
+    embeddings_module._total_cost = 0.0
+    with patch("src.embeddings._client", return_value=_mock_client(total_tokens=1_000_000)):
+        generate_embedding("some text")
+    assert get_total_cost() == 0.02
