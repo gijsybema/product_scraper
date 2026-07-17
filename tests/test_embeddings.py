@@ -1,0 +1,95 @@
+from pathlib import Path
+import sys
+from unittest.mock import MagicMock, patch
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import openai
+
+from src.embeddings import (
+    build_embedding_text,
+    generate_embedding,
+    format_embedding_for_pg,
+    store_embedding,
+)
+
+_PRODUCT = {
+    "name": "WH-1000XM5",
+    "brand": "Sony",
+    "category": "headphones",
+    "ai_description": "Noise cancelling over-ear headphones.",
+    "specs": {"Kleur": "Zwart", "Gewicht": "250 g", "Leeg": None, "Ook leeg": "", "Null string": "null"},
+}
+
+
+def _mock_client(embedding=None):
+    client = MagicMock()
+    response = MagicMock()
+    response.data = [MagicMock(embedding=embedding or [0.1, 0.2, 0.3])]
+    client.embeddings.create.return_value = response
+    return client
+
+
+# --- build_embedding_text ---
+
+def test_build_embedding_text_fully_populated():
+    text = build_embedding_text(_PRODUCT)
+    assert "WH-1000XM5" in text
+    assert "Merk: Sony" in text
+    assert "Categorie: headphones" in text
+    assert "Noise cancelling over-ear headphones." in text
+    assert "Kleur: Zwart" in text
+    assert "Gewicht: 250 g" in text
+
+def test_build_embedding_text_all_optional_fields_null():
+    product = {"name": "X"}
+    text = build_embedding_text(product)
+    assert text == "X"
+
+def test_build_embedding_text_skips_null_and_empty_specs():
+    text = build_embedding_text(_PRODUCT)
+    assert "Leeg" not in text
+    assert "Ook leeg" not in text
+    assert "Null string" not in text
+
+def test_build_embedding_text_excludes_price():
+    product = {**_PRODUCT, "current_price": 149.99}
+    text = build_embedding_text(product)
+    assert "149.99" not in text
+    assert "149,99" not in text
+
+
+# --- format_embedding_for_pg ---
+
+def test_format_embedding_for_pg_produces_bracketed_string():
+    assert format_embedding_for_pg([0.1, -0.2, 3.0]) == "[0.1,-0.2,3.0]"
+
+
+# --- generate_embedding ---
+
+def test_generate_embedding_returns_vector():
+    with patch("src.embeddings._client", return_value=_mock_client([0.1, 0.2, 0.3])):
+        result = generate_embedding("some text")
+    assert result == [0.1, 0.2, 0.3]
+
+def test_generate_embedding_returns_none_on_openai_error():
+    client = MagicMock()
+    client.embeddings.create.side_effect = openai.APIConnectionError(request=MagicMock())
+    with patch("src.embeddings._client", return_value=client):
+        result = generate_embedding("some text")
+    assert result is None
+
+
+# --- store_embedding ---
+
+def test_store_embedding_issues_update_and_commits():
+    conn = MagicMock()
+    cursor = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cursor
+
+    store_embedding(conn, 42, [0.1, 0.2])
+
+    args, _ = cursor.execute.call_args
+    assert "UPDATE products SET embedding" in args[0]
+    assert args[1] == ("[0.1,0.2]", 42)
+    conn.commit.assert_called_once()

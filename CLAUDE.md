@@ -24,6 +24,7 @@
 - Before implementing a task that depends on an external URL, path, or identifier (e.g. a Coolblue category URL): verify the exact value before writing any code — do not assume it follows the same pattern as prior examples
 - When writing Coolblue parsers: anchor selectors on stable identifiers (section id, aria-label, heading text content) — never on generated CSS class names (css-*), which change between deploys
 - When running inspect_product_page.py for parser recon: if the specs output contains two `Artikelnummer` rows or duplicate Dutch labels, the URL is a bundle page — use a single-product URL instead to ensure the key mapping covers only one product's spec structure
+- When adding a module that mirrors an existing one's role (e.g. another external-API wrapper), diff its error-handling scope against the closest existing precedent (e.g. exception types caught) during verify, not just against the spec's literal wording
 - Never modify `docs/spec.md` without explicit user confirmation; always show proposed changes and wait for approval
 - Before implementing a SQL check that depends on a minimum row count (e.g. `COUNT(...) >= N` in a time window), or before finalizing the scope of a one-off backfill/data-fix script: run a diagnostic query against the live DB to verify actual data density / affected-row count first
 

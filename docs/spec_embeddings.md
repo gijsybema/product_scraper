@@ -21,7 +21,7 @@ The scraper repo needs to generate and store a vector embedding for every active
 |---|---|
 | FR-1 | Every active product must have an `embedding vector(1536)` stored in `products.embedding`. |
 | FR-2 | Embeddings are generated using OpenAI `text-embedding-3-small` (1536 dimensions). |
-| FR-3 | The embedding input is a plain-text string assembled from: `name`, `brand`, `category`, `ai_description` (if not null), price tier label, current price, and specs JSONB as `key: value` pairs. |
+| FR-3 | The embedding input is a plain-text string assembled from: `name`, `brand`, `category`, `ai_description` (if not null), and specs JSONB as `key: value` pairs. Price is deliberately excluded — see §5 "Why price is excluded". |
 | FR-4 | Embeddings are generated at first product discovery (alongside `ai_description`), when `embedding IS NULL`. |
 | FR-5 | Embeddings are **never regenerated** unless `embedding IS NULL`. |
 | FR-6 | A standalone backfill script generates embeddings for all existing `active = true` products where `embedding IS NULL`. |
@@ -37,7 +37,7 @@ The scraper repo needs to generate and store a vector embedding for every active
 | NFR-1 | Rate limiting: 100ms sleep between consecutive OpenAI API calls (both discovery hook and backfill). |
 | NFR-2 | The discovery hook must add negligible latency to the discovery pipeline on API success, and zero latency impact on API failure beyond the single call timeout. |
 | NFR-3 | All embedding logic is isolated in `src/embeddings.py` — no OpenAI calls in scripts or other modules. |
-| NFR-4 | Unit tests cover text building, price tier logic, PG formatting, and error handling without live API calls. |
+| NFR-4 | Unit tests cover text building, PG formatting, and error handling without live API calls. |
 | NFR-5 | The backfill script logs `[OK]` / `[SKIP]` per product and prints a summary (total / processed / skipped) on completion. |
 | NFR-6 | `OPENAI_API_KEY` must be present at runtime; the module should raise a clear error on import if the key is missing and the caller tries to generate an embedding. |
 
@@ -66,36 +66,25 @@ Fields are included in this order; any field that is null, empty string, or miss
 Merk: {brand}
 Categorie: {category}
 {ai_description}
-Prijssegment: {price_tier_label}
-Huidige prijs: €{current_price}
 Specs:
 {key}: {value}
 {key}: {value}
 …
 ```
 
-**Price tier label** — derived from `current_price` and `category`. Thresholds are category-specific because price ranges differ significantly across product types:
-
-| Category | Budget | Middensegment | Premium |
-|---|---|---|---|
-| headphones | < €100 | €100–€300 | > €300 |
-| earbuds | < €50 | €50–€150 | > €150 |
-| speakers | < €75 | €75–€250 | > €250 |
-| soundbars | < €150 | €150–€500 | > €500 |
-| *(unknown / null)* | < €100 | €100–€300 | > €300 |
-
-Returns `"onbekend"` if price is None.
-
 **Specs serialisation:** iterate `specs` JSONB as key/value pairs; skip entries where value is `None`, `""`, or the literal string `"null"`. One `key: value` line per entry.
+
+### Why price is excluded
+
+Price changes daily and FR-5 says embeddings are never regenerated once set, so any price signal baked into the text would drift permanently — a product embedded as "premium, €450" stays that way in the vector even after it drops to a €180 deal, which is exactly the case this app most needs to surface well. Numeric price values also don't embed meaningfully (the model doesn't reason over magnitudes from tokenized digits). Price-based relevance/filtering is deferred entirely to the web app's query-time logic against `price_history`, kept separate from the vector. This also means neither the backfill query nor the discovery hook need to source `current_price` at all.
 
 ### Module: `src/embeddings.py`
 
-Five functions, no side effects at import time:
+Four functions, no side effects at import time:
 
 | Function | Signature | Purpose |
 |---|---|---|
 | `build_embedding_text` | `(product: dict) -> str` | Assembles plain-text input string. Never raises. |
-| `get_price_tier` | `(price: float \| None, category: str \| None) -> str` | Returns `"budget"`, `"middensegment"`, `"premium"`, or `"onbekend"`. |
 | `generate_embedding` | `(text: str) -> list[float] \| None` | Calls OpenAI API; returns None and logs WARNING on any failure. |
 | `format_embedding_for_pg` | `(embedding: list[float]) -> str` | Formats as `[n1,n2,…]` for psycopg2. |
 | `store_embedding` | `(conn, product_id: int, embedding: list[float]) -> None` | Issues `UPDATE products SET embedding = %s WHERE id = %s` and commits. |
@@ -115,13 +104,11 @@ The hook queries `embedding IS NULL` after upsert so it is idempotent — re-run
 ### Backfill query
 
 ```sql
-SELECT id, name, brand, category, specs, ai_description, current_price
+SELECT id, name, brand, category, specs, ai_description
 FROM products
 WHERE embedding IS NULL AND active = true
 ORDER BY id;
 ```
-
-`current_price` is sourced from `price_history` via a subquery or the latest row — confirm the exact column/join during T_E4 (see Risks §7).
 
 ### ivfflat index
 
@@ -141,7 +128,7 @@ ORDER BY id;
 
 ### Phase 2 — Core module
 
-6. Implement `src/embeddings.py` (all five functions).
+6. Implement `src/embeddings.py` (all four functions).
 7. Write `tests/test_embeddings.py` (pure unit tests, no live API calls).
 
 ### Phase 3 — Discovery integration (moved ahead of backfill)
@@ -162,7 +149,7 @@ ORDER BY id;
 | # | Risk / Ambiguity | Mitigation |
 |---|---|---|
 | R-1 | **pgvector not available on Railway.** Railway's managed Postgres may not have the extension pre-installed. | Run `SELECT * FROM pg_available_extensions WHERE name = 'vector';` in the Railway DB console before writing any migration code. Block T_E1 until confirmed. |
-| R-2 | **`current_price` not on the products table.** The schema has no `current_price` column; price lives in `price_history`. The backfill query and discovery hook need to source the latest price. | During T_E5 (now implemented before T_E4), confirm whether to JOIN `price_history` for latest price or whether a `current_price` column will be added as part of another task. T_E4 reuses the same sourcing method. The embedding text gracefully omits price if null. |
+| R-2 | ~~`current_price` not on the products table.~~ **RESOLVED — no longer applicable.** Original concern: the backfill query and discovery hook would need to source the latest price from `price_history`. | Superseded: price is excluded from the embedding text entirely (see §5 "Why price is excluded"), so neither the backfill query nor the discovery hook need `current_price` at all. |
 | R-3 | **`ai_description` not yet implemented (T27+).** Embeddings generated before T27+ will be missing the description field. | Acceptable — FR-5 says embeddings are never regenerated unless null. Once T27+ lands and descriptions are backfilled, a second embedding backfill pass can be run if richer embeddings are desired. Flag this as a conscious trade-off. |
 | R-4 | **ivfflat index requires rows to exist before it is useful.** An index built on an empty (or near-empty) table has poor query performance until the catalogue is populated. | Apply the index in the migration regardless; it will become effective after the backfill run. No action needed beyond awareness. |
 | R-5 | **Rate limit from OpenAI.** `text-embedding-3-small` has generous rate limits, but a large backfill (800+ products) could hit RPM limits. | 100ms sleep gives ~10 req/s, well within free-tier limits. If throttled, increase sleep to 500ms in `--limit` test runs before running full backfill. |
@@ -176,7 +163,7 @@ ORDER BY id;
 |---|---|---|
 | T_E1 | Verify pgvector availability on local + Railway; write and apply schema migration | ✅ Done |
 | T_E2 | Add `openai>=1.0.0` to `requirements.txt`; confirm `OPENAI_API_KEY` in both environments | ✅ Done |
-| T_E3 | Implement `src/embeddings.py` (5 functions) and `tests/test_embeddings.py` | ⬜ Not started |
+| T_E3 | Implement `src/embeddings.py` (4 functions) and `tests/test_embeddings.py` | ✅ Done |
 | T_E5 | Add embedding hook to `scripts/discover_products.py`; test with `--limit 3`, then confirm working in production | ⬜ Not started |
 | T_E4 | Implement `scripts/backfill_embeddings.py`; validate with dry-run + small `--limit` against local DB. Full backfill runs against production only, after T_E5 is confirmed working in production | ⬜ Not started |
 
@@ -222,14 +209,12 @@ Steps:
 **Phase:** 2  
 **Files:** `src/embeddings.py` (create), `tests/test_embeddings.py` (create)
 
-Implement all five functions as specified in §5. No OpenAI calls at import time.
+Implement all four functions as specified in §5. No OpenAI calls at import time.
 
 Unit tests (no live API, no live DB):
 - `build_embedding_text` with fully-populated product dict — assert all fields present in output
 - `build_embedding_text` with all optional fields null — assert output contains at least `name`
 - `build_embedding_text` skips specs entries with null/empty values
-- `get_price_tier` for each category at boundary values (exactly at threshold → middensegment)
-- `get_price_tier` with price=None returns `"onbekend"`
 - `format_embedding_for_pg` produces correct `[n,n,…]` string
 - `generate_embedding` returns None and logs at WARNING when `OpenAIError` is raised (mock the client)
 
@@ -240,15 +225,14 @@ Unit tests (no live API, no live DB):
 **Phase:** 3  
 **Files:** `scripts/discover_products.py` (modify)
 
-1. Resolve R-2: determine how to source `current_price` (join `price_history` or a column). This decision is shared with T_E4's backfill query.
-2. After `upsert_product()` succeeds, add the hook:
-   - Query `SELECT id, name, brand, category, specs, ai_description, current_price FROM products WHERE id = %s AND embedding IS NULL`.
+1. After `upsert_product()` succeeds, add the hook:
+   - Query `SELECT id, name, brand, category, specs, ai_description FROM products WHERE id = %s AND embedding IS NULL`.
    - If row returned: build text → generate → store.
    - If not returned (embedding already set): skip.
-3. Wrap the entire hook in `try/except Exception`; log WARNING on failure, continue.
-4. Sleep 100ms after each API call.
-5. Test with `python scripts/discover_products.py --limit 3` against local DB: confirm embeddings generated for new products and not overwritten on re-run.
-6. Deploy to Railway. Confirm at least one real newly-discovered product in production gets `embedding` populated by the hook before starting T_E4's backfill.
+2. Wrap the entire hook in `try/except Exception`; log WARNING on failure, continue.
+3. Sleep 100ms after each API call.
+4. Test with `python scripts/discover_products.py --limit 3` against local DB: confirm embeddings generated for new products and not overwritten on re-run.
+5. Deploy to Railway. Confirm at least one real newly-discovered product in production gets `embedding` populated by the hook before starting T_E4's backfill.
 
 ---
 
@@ -257,11 +241,10 @@ Unit tests (no live API, no live DB):
 **Phase:** 4 (gated on T_E5 being confirmed working in production)  
 **Files:** `scripts/backfill_embeddings.py` (create)
 
-1. Reuse the `current_price` sourcing method decided in T_E5 (R-2). Update the query accordingly.
-2. Implement the script with `--limit N` and `--dry-run` flags. Module docstring must describe both flags.
-3. Run `python scripts/backfill_embeddings.py --dry-run --limit 5` against local DB — inspect printed embedding texts.
-4. Run `python scripts/backfill_embeddings.py --limit 5` — inspect DB rows to confirm embeddings are stored and accepted by pgvector.
-5. Do not run a full backfill against local DB. Once validated with `--limit 5`, run the full backfill against production. Local DB can be refreshed with a copy of production data afterward if a fully-embedded local dataset is needed for further testing.
+1. Implement the script with `--limit N` and `--dry-run` flags. Module docstring must describe both flags.
+2. Run `python scripts/backfill_embeddings.py --dry-run --limit 5` against local DB — inspect printed embedding texts.
+3. Run `python scripts/backfill_embeddings.py --limit 5` — inspect DB rows to confirm embeddings are stored and accepted by pgvector.
+4. Do not run a full backfill against local DB. Once validated with `--limit 5`, run the full backfill against production. Local DB can be refreshed with a copy of production data afterward if a fully-embedded local dataset is needed for further testing.
 
 ---
 
@@ -281,16 +264,14 @@ Unit tests (no live API, no live DB):
 - [x] `OPENAI_API_KEY` set in Railway env vars, shared with the `discover_products` service
 
 ### Core module (`src/embeddings.py`)
-- [ ] `build_embedding_text` produces correct output for fully-populated product
-- [ ] `build_embedding_text` handles all-null optional fields without raising
-- [ ] `build_embedding_text` skips null/empty spec values
-- [ ] `get_price_tier` returns correct label for all 4 categories at boundaries
-- [ ] `get_price_tier` returns `"onbekend"` for null price
-- [ ] `generate_embedding` returns None and logs WARNING on OpenAI failure
-- [ ] `format_embedding_for_pg` produces `[n,n,…]` string
-- [ ] `store_embedding` issues correct UPDATE and commits
-- [ ] No OpenAI calls at import time
-- [ ] All unit tests pass (`pytest tests/test_embeddings.py`)
+- [x] `build_embedding_text` produces correct output for fully-populated product
+- [x] `build_embedding_text` handles all-null optional fields without raising
+- [x] `build_embedding_text` skips null/empty spec values
+- [x] `generate_embedding` returns None and logs WARNING on OpenAI failure
+- [x] `format_embedding_for_pg` produces `[n,n,…]` string
+- [x] `store_embedding` issues correct UPDATE and commits
+- [x] No OpenAI calls at import time
+- [x] All unit tests pass (`pytest tests/test_embeddings.py`)
 
 ### Discovery hook (implemented and verified before backfill)
 - [ ] `discover_products.py --limit 3` generates embeddings for newly discovered products
