@@ -212,3 +212,11 @@
 - **Native Windows Postgres installs don't ship pgvector via Stack Builder — building from source is the real path.** Needed: VS Build Tools (C++ workload only, not the full IDE), an explicit `PGROOT` pointing at the correct version when multiple PG versions coexist on one machine, and an elevated terminal for the final `nmake install` step (writes into `Program Files`). Worth keeping as a runbook — this will recur if local Postgres is ever rebuilt or a teammate sets up the same project.
 - **When multiple native Postgres versions are installed side by side, don't assume the one on PATH is the one in use.** `pg_config` resolved to PG17 while the actual dev DB service was PG18 — silently targeting the wrong version's `lib`/`share` directories would have made the extension invisible to the real dev DB despite a "successful" build.
 - **The actual schema change was trivial — the spec had zero DDL ambiguity, all the effort was environment setup.** Reinforces the T27 pattern: writing exact DDL into the spec up front makes the code-writing step nearly instant; the local dev environment is where unplanned work actually surfaces.
+
+---
+
+## T_E2 — Add openai dependency and confirm OPENAI_API_KEY
+
+- **Railway env vars are project-scoped by default but service-scoped in effect.** Adding `OPENAI_API_KEY` at the project level didn't automatically make it available to any running service — it had to be explicitly shared/attached to `discover_products`. Worth checking this every time a new env var is added to Railway, not just assuming it's live everywhere.
+- **A dependency's real home is per-script, not per-project.** Since there's no dedicated `backfill_embeddings` Railway service (it's a manual one-off script), the right question was "which execution context actually needs this var attached in Railway?" rather than "is the var set in Railway" — the existing `DATABASE_URL`-manual-prod pattern already covers the backfill's needs via local `.env.local`.
+- **`requirements.txt` and the installed venv are two different states.** Adding a line to `requirements.txt` doesn't install anything — easy to forget mid-task and hit an `ImportError` later in T_E3 if not run explicitly.

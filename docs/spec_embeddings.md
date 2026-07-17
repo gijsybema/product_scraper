@@ -144,15 +144,16 @@ ORDER BY id;
 6. Implement `src/embeddings.py` (all five functions).
 7. Write `tests/test_embeddings.py` (pure unit tests, no live API calls).
 
-### Phase 3 — Backfill
+### Phase 3 — Discovery integration (moved ahead of backfill)
 
-8. Implement `scripts/backfill_embeddings.py`.
-9. Run against local DB to validate end-to-end: embeddings written, format accepted by pgvector.
+8. Add embedding hook to `scripts/discover_products.py`.
+9. Test with `--limit 3` against local DB: confirm embeddings are generated for new products and not overwritten on re-run.
+10. Deploy; confirm the hook populates `embedding` for at least one real newly-discovered product in production before proceeding to Phase 4.
 
-### Phase 4 — Discovery integration
+### Phase 4 — Backfill (gated on Phase 3 production confirmation)
 
-10. Add embedding hook to `scripts/discover_products.py`.
-11. Test with `--limit 3` against local DB: confirm embeddings are generated for new products and not overwritten on re-run.
+11. Implement `scripts/backfill_embeddings.py`.
+12. Run dry-run + small `--limit` against local DB to validate end-to-end: embeddings written, format accepted by pgvector.
 
 ---
 
@@ -161,7 +162,7 @@ ORDER BY id;
 | # | Risk / Ambiguity | Mitigation |
 |---|---|---|
 | R-1 | **pgvector not available on Railway.** Railway's managed Postgres may not have the extension pre-installed. | Run `SELECT * FROM pg_available_extensions WHERE name = 'vector';` in the Railway DB console before writing any migration code. Block T_E1 until confirmed. |
-| R-2 | **`current_price` not on the products table.** The schema has no `current_price` column; price lives in `price_history`. The backfill query and discovery hook need to source the latest price. | During T_E4, confirm whether to JOIN `price_history` for latest price or whether a `current_price` column will be added as part of another task. The embedding text gracefully omits price if null. |
+| R-2 | **`current_price` not on the products table.** The schema has no `current_price` column; price lives in `price_history`. The backfill query and discovery hook need to source the latest price. | During T_E5 (now implemented before T_E4), confirm whether to JOIN `price_history` for latest price or whether a `current_price` column will be added as part of another task. T_E4 reuses the same sourcing method. The embedding text gracefully omits price if null. |
 | R-3 | **`ai_description` not yet implemented (T27+).** Embeddings generated before T27+ will be missing the description field. | Acceptable — FR-5 says embeddings are never regenerated unless null. Once T27+ lands and descriptions are backfilled, a second embedding backfill pass can be run if richer embeddings are desired. Flag this as a conscious trade-off. |
 | R-4 | **ivfflat index requires rows to exist before it is useful.** An index built on an empty (or near-empty) table has poor query performance until the catalogue is populated. | Apply the index in the migration regardless; it will become effective after the backfill run. No action needed beyond awareness. |
 | R-5 | **Rate limit from OpenAI.** `text-embedding-3-small` has generous rate limits, but a large backfill (800+ products) could hit RPM limits. | 100ms sleep gives ~10 req/s, well within free-tier limits. If throttled, increase sleep to 500ms in `--limit` test runs before running full backfill. |
@@ -174,10 +175,10 @@ ORDER BY id;
 | Task | Description | Status |
 |---|---|---|
 | T_E1 | Verify pgvector availability on local + Railway; write and apply schema migration | ✅ Done |
-| T_E2 | Add `openai>=1.0.0` to `requirements.txt`; confirm `OPENAI_API_KEY` in both environments | ⬜ Not started |
+| T_E2 | Add `openai>=1.0.0` to `requirements.txt`; confirm `OPENAI_API_KEY` in both environments | ✅ Done |
 | T_E3 | Implement `src/embeddings.py` (5 functions) and `tests/test_embeddings.py` | ⬜ Not started |
-| T_E4 | Implement `scripts/backfill_embeddings.py`; run dry-run and full backfill against local DB | ⬜ Not started |
-| T_E5 | Add embedding hook to `scripts/discover_products.py`; test with `--limit 3` | ⬜ Not started |
+| T_E5 | Add embedding hook to `scripts/discover_products.py`; test with `--limit 3`, then confirm working in production | ⬜ Not started |
+| T_E4 | Implement `scripts/backfill_embeddings.py`; validate with dry-run + small `--limit` against local DB. Full backfill runs against production only, after T_E5 is confirmed working in production | ⬜ Not started |
 
 ---
 
@@ -212,7 +213,7 @@ Steps:
 
 1. Add `openai>=1.0.0` to `requirements.txt`.
 2. Confirm `OPENAI_API_KEY` is set in `.env.local`.
-3. Confirm `OPENAI_API_KEY` is set in Railway environment variables.
+3. Confirm `OPENAI_API_KEY` is set in Railway environment variables and shared/attached to the `discover_products` service (needed for the T_E5 discovery hook). The T_E4 backfill script is run manually against production via the existing `DATABASE_URL`-manual-prod pattern and reads `OPENAI_API_KEY` from local `.env.local` — no separate Railway service required.
 
 ---
 
@@ -234,31 +235,33 @@ Unit tests (no live API, no live DB):
 
 ---
 
-### T_E4 — Implement `scripts/backfill_embeddings.py`
-
-**Phase:** 3  
-**Files:** `scripts/backfill_embeddings.py` (create)
-
-1. Resolve R-2: determine how to source `current_price` (join `price_history` or a column). Update the query accordingly.
-2. Implement the script with `--limit N` and `--dry-run` flags. Module docstring must describe both flags.
-3. Run `python scripts/backfill_embeddings.py --dry-run --limit 5` against local DB — inspect printed embedding texts.
-4. Run `python scripts/backfill_embeddings.py --limit 5` — inspect DB rows to confirm embeddings are stored and accepted by pgvector.
-5. Run full backfill once satisfied.
-
----
-
 ### T_E5 — Add discovery hook in `scripts/discover_products.py`
 
-**Phase:** 4  
+**Phase:** 3  
 **Files:** `scripts/discover_products.py` (modify)
 
-1. After `upsert_product()` succeeds, add the hook:
+1. Resolve R-2: determine how to source `current_price` (join `price_history` or a column). This decision is shared with T_E4's backfill query.
+2. After `upsert_product()` succeeds, add the hook:
    - Query `SELECT id, name, brand, category, specs, ai_description, current_price FROM products WHERE id = %s AND embedding IS NULL`.
    - If row returned: build text → generate → store.
    - If not returned (embedding already set): skip.
-2. Wrap the entire hook in `try/except Exception`; log WARNING on failure, continue.
-3. Sleep 100ms after each API call.
-4. Test with `python scripts/discover_products.py --limit 3` against local DB: confirm embeddings generated for new products and not overwritten on re-run.
+3. Wrap the entire hook in `try/except Exception`; log WARNING on failure, continue.
+4. Sleep 100ms after each API call.
+5. Test with `python scripts/discover_products.py --limit 3` against local DB: confirm embeddings generated for new products and not overwritten on re-run.
+6. Deploy to Railway. Confirm at least one real newly-discovered product in production gets `embedding` populated by the hook before starting T_E4's backfill.
+
+---
+
+### T_E4 — Implement `scripts/backfill_embeddings.py`
+
+**Phase:** 4 (gated on T_E5 being confirmed working in production)  
+**Files:** `scripts/backfill_embeddings.py` (create)
+
+1. Reuse the `current_price` sourcing method decided in T_E5 (R-2). Update the query accordingly.
+2. Implement the script with `--limit N` and `--dry-run` flags. Module docstring must describe both flags.
+3. Run `python scripts/backfill_embeddings.py --dry-run --limit 5` against local DB — inspect printed embedding texts.
+4. Run `python scripts/backfill_embeddings.py --limit 5` — inspect DB rows to confirm embeddings are stored and accepted by pgvector.
+5. Do not run a full backfill against local DB. Once validated with `--limit 5`, run the full backfill against production. Local DB can be refreshed with a copy of production data afterward if a fully-embedded local dataset is needed for further testing.
 
 ---
 
@@ -273,9 +276,9 @@ Unit tests (no live API, no live DB):
 - [x] `sql/schema.sql` updated to include column and ivfflat index
 
 ### Dependency
-- [ ] `openai>=1.0.0` in `requirements.txt`
-- [ ] `OPENAI_API_KEY` set in `.env.local`
-- [ ] `OPENAI_API_KEY` set in Railway env vars
+- [x] `openai>=1.0.0` in `requirements.txt`
+- [x] `OPENAI_API_KEY` set in `.env.local`
+- [x] `OPENAI_API_KEY` set in Railway env vars, shared with the `discover_products` service
 
 ### Core module (`src/embeddings.py`)
 - [ ] `build_embedding_text` produces correct output for fully-populated product
@@ -289,18 +292,20 @@ Unit tests (no live API, no live DB):
 - [ ] No OpenAI calls at import time
 - [ ] All unit tests pass (`pytest tests/test_embeddings.py`)
 
-### Backfill script
-- [ ] `--dry-run --limit 5` prints embedding texts without writing to DB
-- [ ] `--limit 5` writes embeddings to DB; rows confirmed in pgAdmin
-- [ ] pgvector accepts the stored format (no type error on write)
-- [ ] Full backfill completes without crashing; summary log shows 0 unexpected skips
-- [ ] Re-running backfill on already-embedded products: no rows updated (query filters `embedding IS NULL`)
-
-### Discovery hook
+### Discovery hook (implemented and verified before backfill)
 - [ ] `discover_products.py --limit 3` generates embeddings for newly discovered products
 - [ ] Re-running discovery does not overwrite existing embeddings
 - [ ] An OpenAI failure in the hook does not abort discovery (log only)
 - [ ] No embedding-related import errors when running without `OPENAI_API_KEY` set (fail at call time, not import time)
+- [ ] Confirmed in production: a real newly-discovered product gets `embedding` populated by the hook
+
+### Backfill script (gated on the discovery hook check above)
+- [ ] `--dry-run --limit 5` prints embedding texts without writing to DB
+- [ ] `--limit 5` writes embeddings to DB; rows confirmed in pgAdmin
+- [ ] pgvector accepts the stored format (no type error on write)
+- [ ] Full backfill run against production completes without crashing; summary log shows 0 unexpected skips
+- [ ] Re-running backfill on already-embedded products: no rows updated (query filters `embedding IS NULL`)
+- [ ] Local DB refreshed from a production copy after the production backfill, if a fully-embedded local dataset is needed for further testing
 
 ### Deployment
 - [ ] Railway cron job for discovery unchanged (no `--limit` flag in production)
