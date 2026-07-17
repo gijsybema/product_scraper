@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- retailers
 CREATE TABLE IF NOT EXISTS retailers (
   id SERIAL PRIMARY KEY,
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS products (
   ai_description TEXT,
   ai_deal_description TEXT,
   ai_deal_description_updated_at TIMESTAMPTZ,
+  embedding vector(1536),
   UNIQUE (retailer_id, sku)
 );
 
@@ -99,5 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_products_category        ON products      (catego
 CREATE INDEX IF NOT EXISTS idx_products_slug            ON products      (slug);
 CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history (product_id);
 CREATE INDEX IF NOT EXISTS idx_price_drops_product_id   ON price_drops   (product_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_fts  ON products 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_fts  ON products
   USING GIN (to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(brand, '')));
+CREATE INDEX IF NOT EXISTS idx_products_embedding
+  ON products USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);

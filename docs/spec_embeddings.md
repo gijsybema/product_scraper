@@ -173,7 +173,7 @@ ORDER BY id;
 
 | Task | Description | Status |
 |---|---|---|
-| T_E1 | Verify pgvector availability on local + Railway; write and apply schema migration | ⬜ Not started |
+| T_E1 | Verify pgvector availability on local + Railway; write and apply schema migration | ✅ Done |
 | T_E2 | Add `openai>=1.0.0` to `requirements.txt`; confirm `OPENAI_API_KEY` in both environments | ⬜ Not started |
 | T_E3 | Implement `src/embeddings.py` (5 functions) and `tests/test_embeddings.py` | ⬜ Not started |
 | T_E4 | Implement `scripts/backfill_embeddings.py`; run dry-run and full backfill against local DB | ⬜ Not started |
@@ -265,12 +265,12 @@ Unit tests (no live API, no live DB):
 ## 9. Acceptance Checklist
 
 ### Schema
-- [ ] `pgvector` extension confirmed available on local Postgres
-- [ ] `pgvector` extension confirmed available on Railway Postgres
-- [ ] `005_add_embedding_column.sql` applied locally; `\d products` shows `embedding vector(1536)`
-- [ ] `005_add_embedding_column.sql` applied on Railway
-- [ ] `rollback_005_add_embedding_column.sql` created and reviewed
-- [ ] `sql/schema.sql` updated to include column and ivfflat index
+- [x] `pgvector` extension confirmed available on local Postgres
+- [x] `pgvector` extension confirmed available on Railway Postgres
+- [x] `005_add_embedding_column.sql` applied locally; `\d products` shows `embedding vector(1536)`
+- [x] `005_add_embedding_column.sql` applied on Railway
+- [x] `rollback_005_add_embedding_column.sql` created and reviewed
+- [x] `sql/schema.sql` updated to include column and ivfflat index
 
 ### Dependency
 - [ ] `openai>=1.0.0` in `requirements.txt`

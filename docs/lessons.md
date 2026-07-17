@@ -203,3 +203,12 @@
 - **A "PASS" with mismatched numbers is not a pass.** The first verify report rationalized a sum mismatch (`total=1` but all counts `0`) as "pre-existing, unrelated" without root-causing it first. When numbers don't add up, root-cause before writing "pre-existing" — the two look identical from the outside until you check.
 - **Provoking the real error condition beats mocking it.** Forcing the actual `CoolblueBlockedError` (403) branch — rather than just confirming the column accepts a write — is what proved `ip_blocked_count` accounts correctly with a real nonzero value.
 - **Migration ordering discipline (local → Railway → code) paid off.** Waiting for explicit Railway confirmation before touching code that reads/writes the renamed column meant zero risk of a prod script hitting a missing column mid-run.
+
+---
+
+## T_E1 — Verify pgvector; schema migration for embedding column
+
+- **Confirm which server a diagnostic query ran against before drawing conclusions, especially with multiple pgAdmin connections open.** The `SELECT version()` result (Debian 17.9) was accidentally run against the Railway connection, not local — this triggered a real detour (Docker/WSL/service forensics) chasing a phantom "two Postgres instances" mystery that didn't exist. A single mislabeled result cost the most time in this task.
+- **Native Windows Postgres installs don't ship pgvector via Stack Builder — building from source is the real path.** Needed: VS Build Tools (C++ workload only, not the full IDE), an explicit `PGROOT` pointing at the correct version when multiple PG versions coexist on one machine, and an elevated terminal for the final `nmake install` step (writes into `Program Files`). Worth keeping as a runbook — this will recur if local Postgres is ever rebuilt or a teammate sets up the same project.
+- **When multiple native Postgres versions are installed side by side, don't assume the one on PATH is the one in use.** `pg_config` resolved to PG17 while the actual dev DB service was PG18 — silently targeting the wrong version's `lib`/`share` directories would have made the extension invisible to the real dev DB despite a "successful" build.
+- **The actual schema change was trivial — the spec had zero DDL ambiguity, all the effort was environment setup.** Reinforces the T27 pattern: writing exact DDL into the spec up front makes the code-writing step nearly instant; the local dev environment is where unplanned work actually surfaces.
