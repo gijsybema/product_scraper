@@ -179,21 +179,22 @@ WHERE job_name = 'price_history_daily'
 ORDER BY next_retry_at ASC
 LIMIT 5;
 
--- Count integrity check: flag runs where total_products != success + failed + blocked (should return 0 rows)
+-- Count integrity check: flag runs where total_products != success + failed + deactivated + ip_blocked (should return 0 rows)
 SELECT
   id,
   started_at,
   total_products,
   success_count,
   failed_count,
-  blocked_count,
-  (success_count + failed_count + blocked_count) AS counted,
-  (total_products - (success_count + failed_count + blocked_count)) AS diff
+  deactivated_count,
+  ip_blocked_count,
+  (success_count + failed_count + deactivated_count + ip_blocked_count) AS counted,
+  (total_products - (success_count + failed_count + deactivated_count + ip_blocked_count)) AS diff
 FROM scrape_runs
-WHERE total_products <> (success_count + failed_count + blocked_count)
+WHERE total_products <> (success_count + failed_count + deactivated_count + ip_blocked_count)
 ORDER BY started_at DESC;
 
--- Sanity check counts: total_products vs (success_count + failed_count + blocked_count)
+-- Sanity check counts: total_products vs (success_count + failed_count + deactivated_count + ip_blocked_count)
 -- Diff should be 0 in normal cases.
 SELECT
   id,
@@ -201,9 +202,10 @@ SELECT
   total_products,
   success_count,
   failed_count,
-  blocked_count,
-  (success_count + failed_count + blocked_count) AS counted,
-  (total_products - (success_count + failed_count + blocked_count)) AS diff
+  deactivated_count,
+  ip_blocked_count,
+  (success_count + failed_count + deactivated_count + ip_blocked_count) AS counted,
+  (total_products - (success_count + failed_count + deactivated_count + ip_blocked_count)) AS diff
 FROM scrape_runs
 WHERE job_name = 'price_history_daily'
 ORDER BY started_at DESC

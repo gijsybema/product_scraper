@@ -196,3 +196,10 @@
 - **A shared function's return-value contract can silently gain new meanings.** T36 made `generate_product_description` return `None` for both "API failed" and "correctly skipped, no specs." `backfill_ai_descriptions.py`, written before T36, still lumps both into one `skipped` counter — worth checking all existing callers whenever a shared function's failure semantics expand, not just the caller being actively edited.
 
 ---
+
+## T30 — Rename `blocked_count` to `deactivated_count`; split out `ip_blocked_count`
+
+- **Live verification found a bug the plan didn't anticipate.** Driving `discover_products.py` end-to-end (not just `py_compile`) surfaced a pre-existing Windows console encoding crash that silently zeroed `scrape_runs` counters on any error path. Only running the actual CLI, not a syntax check, caught it.
+- **A "PASS" with mismatched numbers is not a pass.** The first verify report rationalized a sum mismatch (`total=1` but all counts `0`) as "pre-existing, unrelated" without root-causing it first. When numbers don't add up, root-cause before writing "pre-existing" — the two look identical from the outside until you check.
+- **Provoking the real error condition beats mocking it.** Forcing the actual `CoolblueBlockedError` (403) branch — rather than just confirming the column accepts a write — is what proved `ip_blocked_count` accounts correctly with a real nonzero value.
+- **Migration ordering discipline (local → Railway → code) paid off.** Waiting for explicit Railway confirmation before touching code that reads/writes the renamed column meant zero risk of a prod script hitting a missing column mid-run.

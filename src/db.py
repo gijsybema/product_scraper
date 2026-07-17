@@ -265,7 +265,8 @@ def finish_scrape_run(
     status: str,
     success_count: int,
     failed_count: int,
-    blocked_count: int = 0,
+    deactivated_count: int = 0,
+    ip_blocked_count: int = 0,
     last_error: Optional[str] = None,
 ) -> None:
     with conn.cursor() as cur:
@@ -276,11 +277,12 @@ def finish_scrape_run(
                 status = %s,
                 success_count = %s,
                 failed_count = %s,
-                blocked_count = %s,
+                deactivated_count = %s,
+                ip_blocked_count = %s,
                 last_error = %s
             WHERE id = %s
             """,
-            (status, success_count, failed_count, blocked_count, last_error, run_id),
+            (status, success_count, failed_count, deactivated_count, ip_blocked_count, last_error, run_id),
         )
     conn.commit()
 

@@ -25,6 +25,13 @@ try:
 except ImportError:
     pass
 
+try:
+    # default Windows console encoding (cp1252) can't print emojis used in log messages below
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except AttributeError:
+    pass
+
 from src.coolblue_discovery import get_all_coolblue_products
 from src.coolblue_product_scraping import scrape_product_details, CoolblueBlockedError
 from src.db import get_connection, upsert_product, update_ai_description, create_scrape_run, finish_scrape_run
@@ -181,14 +188,14 @@ def run_category(conn, category, limit=None):
 
         total = len(products)
         status = "success" if failed == 0 and blocked == 0 else ("partial" if success > 0 else "failed")
-        finish_scrape_run(conn, run_id=run_id, status=status, success_count=success, failed_count=failed, blocked_count=blocked)
+        finish_scrape_run(conn, run_id=run_id, status=status, success_count=success, failed_count=failed, ip_blocked_count=blocked)
 
     except CoolblueBlockedError as e:
         conn.rollback()
         print(f"[BLOCKED] Discovery for '{category}' aborted: {e}")
         if run_id is not None:
             try:
-                finish_scrape_run(conn, run_id=run_id, status="blocked", success_count=success, failed_count=failed, blocked_count=blocked, last_error=str(e))
+                finish_scrape_run(conn, run_id=run_id, status="blocked", success_count=success, failed_count=failed, ip_blocked_count=blocked, last_error=str(e))
             except Exception as log_err:
                 print(f"WARNING: could not write blocked run log: {log_err}")
         status = "blocked"
@@ -198,7 +205,7 @@ def run_category(conn, category, limit=None):
         print(f"ERROR during discovery for '{category}': {e}")
         if run_id is not None:
             try:
-                finish_scrape_run(conn, run_id=run_id, status="failed", success_count=success, failed_count=failed, blocked_count=blocked, last_error=str(e))
+                finish_scrape_run(conn, run_id=run_id, status="failed", success_count=success, failed_count=failed, ip_blocked_count=blocked, last_error=str(e))
             except Exception as log_err:
                 print(f"WARNING: could not write failed run log: {log_err}")
 

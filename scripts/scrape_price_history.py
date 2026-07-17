@@ -33,6 +33,13 @@ try:
 except ImportError:
     pass
 
+try:
+    # default Windows console encoding (cp1252) can't print emojis used in log messages below
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except AttributeError:
+    pass
+
 from src.db import get_connection, upsert_price_history, get_products_to_scrape, get_price_context, update_ai_deal_description
 from src.db import create_scrape_run, finish_scrape_run, handle_product_404, reset_404_count, deactivate_if_long_term_oos, OOS_DEACTIVATION_THRESHOLD
 from src.coolblue_product_scraping import scrape_product_facts
@@ -334,7 +341,7 @@ def main():
                 status=status,
                 success_count=success,
                 failed_count=failed,
-                blocked_count=deactivated,
+                deactivated_count=deactivated,
                 last_error=last_error,
             )
         except Exception as e:

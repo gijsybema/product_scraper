@@ -218,7 +218,7 @@ Extend the existing Coolblue headphone price-tracking pipeline to support four a
 | ✅ | T26 | Check spec document and clean it | 11 |
 | ✅ | T27 | Add 403 block detection and graceful abort: `CoolblueBlockedError` raised after 3× 403 per product (30s/60s/120s backoff); `discover_products` aborts after 5 consecutive blocked products; `scrape_runs` records `status='blocked'` and `blocked_count` | 12 |
 | ✅ | T29 | Investigate why earbuds, speakers, and soundbars have not run since 2026-05-23. Check Railway cron config: `--all` flag should run all four categories. Confirm Railway logs and `scrape_runs` to identify whether the block happens in discovery (URL crawl) or product detail scraping, and whether the categories are being invoked at all. | 12 |
-| ⬜ | T30 | Rename `blocked_count` column in `scrape_runs` to `deactivated_count`; update all references in `src/db.py`, `scripts/scrape_price_history.py`, `scripts/discover_products.py`, `sql/schema.sql`, `sql/checks/db_healthchecks.sql`, and any views. For `discover_products`, store actual IP block count separately (currently it also uses `blocked_count` to mean 403 blocks — needs a dedicated column or `last_error` annotation). | 12 |
+| ✅ | T30 | Rename `blocked_count` column in `scrape_runs` to `deactivated_count`; update all references in `src/db.py`, `scripts/scrape_price_history.py`, `scripts/discover_products.py`, `sql/schema.sql`, `sql/checks/db_healthchecks.sql`, and any views. For `discover_products`, store actual IP block count separately (currently it also uses `blocked_count` to mean 403 blocks — needs a dedicated column or `last_error` annotation). | 12 |
 
 ---
 

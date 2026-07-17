@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
   total_products INT,
   success_count INT DEFAULT 0,
   failed_count INT DEFAULT 0,
-  blocked_count INT DEFAULT 0,
+  deactivated_count INT DEFAULT 0,
+  ip_blocked_count INT DEFAULT 0,
   next_retry_at TIMESTAMPTZ,
   retry_attempt INT NOT NULL DEFAULT 0,
   last_error TEXT
