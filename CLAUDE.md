@@ -88,6 +88,7 @@ If verification cannot be completed (no prod DB access, UI interaction required,
 - Always initialise variables used in `finally` before the `try` block (`run_id = None`, `status = "failed"`, `success = 0`) — the summary or cleanup must be safe to execute on any crash path
 - When adding a `finally` to an existing `try`, check for `return`/`raise` inside the `try` first — they trigger `finally` and can produce misleading output if defaults are not set
 - When changing what a shared function's return value means (e.g. a new reason to return `None`), check all existing callers that branch on it — a caller's local success/failure counters or operational status reporting may now miscategorize a previously-impossible case
+- When adding a new DB write function to `src/db.py`, diff its commit behavior against the closest existing precedent (e.g. `update_ai_description` does not commit — the caller does) — an internal `conn.commit()` can silently break a caller's transaction/rollback boundary even when the function is otherwise spec-compliant
 
 ## Validation Rules
 - Validation functions return `(bool, list[str])` — a valid flag and a list of human-readable error reasons

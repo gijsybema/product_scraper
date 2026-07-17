@@ -171,7 +171,7 @@ ORDER BY id;
 | T_E1 | Verify pgvector availability on local + Railway; write and apply schema migration | ✅ Done |
 | T_E2 | Add `openai>=1.0.0` to `requirements.txt`; confirm `OPENAI_API_KEY` in both environments | ✅ Done |
 | T_E3 | Implement `src/embeddings.py` (4 functions) and `tests/test_embeddings.py` | ✅ Done |
-| T_E5 | Add embedding hook to `scripts/discover_products.py`; test with `--limit 3`, then confirm working in production | ⬜ Not started |
+| T_E5 | Add embedding hook to `scripts/discover_products.py`; test with `--limit 3`, then confirm working in production | ✅ Done |
 | T_E4 | Implement `scripts/backfill_embeddings.py`; validate with dry-run + small `--limit` against local DB. Full backfill runs against production only, after T_E5 is confirmed working in production | ⬜ Not started |
 
 ---
@@ -284,11 +284,11 @@ Unit tests (no live API, no live DB):
 - [x] All unit tests pass (`pytest tests/test_embeddings.py`)
 
 ### Discovery hook (implemented and verified before backfill)
-- [ ] `discover_products.py --limit 3` generates embeddings for newly discovered products
-- [ ] Re-running discovery does not overwrite existing embeddings
-- [ ] An OpenAI failure in the hook does not abort discovery (log only)
-- [ ] No embedding-related import errors when running without `OPENAI_API_KEY` set (fail at call time, not import time)
-- [ ] Confirmed in production: a real newly-discovered product gets `embedding` populated by the hook
+- [x] `discover_products.py --limit 3` generates embeddings for newly discovered products
+- [x] Re-running discovery does not overwrite existing embeddings
+- [x] An OpenAI failure in the hook does not abort discovery (log only)
+- [x] No embedding-related import errors when running without `OPENAI_API_KEY` set (fail at call time, not import time)
+- [x] Confirmed in production: a real newly-discovered product gets `embedding` populated by the hook
 
 ### Backfill script (gated on the discovery hook check above)
 - [ ] `--dry-run --limit 5` prints embedding texts without writing to DB
