@@ -88,6 +88,17 @@ TELEGRAM_CHAT_ID=your_chat_id
 
 Set `DATABASE_URL` — this takes precedence over all `DB_*` vars. Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as env vars.
 
+### Rotating the production database password
+
+Use Railway's built-in rotation, not a manual `ALTER USER` — Railway's own UI keeps the `postgres` user's password and its `PGPASSWORD`/`DATABASE_URL`/`DATABASE_PUBLIC_URL` variables in sync automatically, restarting the Postgres service to apply it.
+
+1. Railway dashboard → Postgres service → **Database** tab → **Config** sub-tab.
+2. Under **Connection**, click **Regenerate** next to "Regenerate Password". This breaks existing connections until they use the new password, and triggers a Postgres service restart.
+3. Wait for the restart to finish (check **Deployments** → logs for `database system is ready to accept connections`) before relying on the new password.
+4. Update `DATABASE_PUBLIC_URL` in your local `.env.local` to the new value (Postgres service → **Variables** tab).
+5. The app service's `DATABASE_URL` auto-updates if it's set as a Railway variable reference (e.g. `${{Postgres.DATABASE_URL}}`) rather than a pasted-in literal — verify this in the app service's Variables tab.
+6. `PROD_READONLY_URL` (the `scraper_readonly` user) is a separate credential and is **not** rotated by this — only touch it if you're rotating that user specifically.
+
 ## Running scripts
 
 ```bash
