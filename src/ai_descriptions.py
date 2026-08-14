@@ -87,24 +87,54 @@ def _fmt_price_diff(value: float) -> str:
     return f"{sign}{_fmt_price(abs(value))}"
 
 
+def _classify_price_situation(ctx: dict) -> str:
+    """Deterministically pick which single extra fact matters, instead of asking
+    the model to judge what's 'salient' (subjective, inconsistent between calls).
+
+    low_90d (not "lowest ever") is used deliberately — it's the longest window
+    a visitor can actually verify on the site's own price-history graph, which
+    only shows 90 days.
+    """
+    current = ctx["current_price"]
+    if current <= ctx["low_90d"]:
+        return "low_90d"
+    if current <= ctx["low_30d"]:
+        return "low_30d"
+    if current >= ctx["high_30d"]:
+        return "high_30d"
+    return "none"
+
+
+_SITUATION_INSTRUCTION = {
+    "low_90d": "Vermeld expliciet dat dit de laagste prijs in de afgelopen 90 dagen is.",
+    "low_30d": "Vermeld expliciet dat dit de laagste prijs in de afgelopen 30 dagen is.",
+    "high_30d": "Vermeld expliciet dat dit de hoogste prijs in de afgelopen 30 dagen is.",
+    "none": "Vermeld hoe de huidige prijs zich verhoudt tot de laagste prijs in de afgelopen 90 dagen.",
+}
+
+
 def _build_deal_description_prompt(product: dict, price_context: dict) -> str:
     ctx = price_context
+    situation_instruction = _SITUATION_INSTRUCTION[_classify_price_situation(ctx)]
     return (
         "Je bent een neutrale prijsanalist voor een Nederlandse prijsvergelijkingssite.\n\n"
-        "Schrijf 1-2 zinnen die de huidige prijssituatie van dit product samenvatten.\n"
-        "Noem alleen de meest opvallende feiten. Schrijf feitelijk, geen marketingtaal.\n"
+        "Schrijf een korte prijsanalyse van twee korte zinnen:\n"
+        "Zin 1: benoem de huidige prijs en het verschil met de vorige prijs.\n"
+        f"Zin 2: {situation_instruction}\n"
+        "Houd beide zinnen kort en bondig. Schrijf feitelijk, geen marketingtaal.\n"
         "Gebruik alleen de tijdsperiodes en cijfers die hieronder gegeven zijn — verzin geen "
-        "andere tijdsperiodes, vergelijkingen of prijssegmenten.\n"
+        "andere tijdsperiodes, vergelijkingen of prijssegmenten. Noem nooit een tijdsaanduiding "
+        "(zoals 'vorige week', 'gisteren' of 'eerder') bij de vorige prijs — die is hieronder niet gegeven.\n"
         "Gebruik nooit de woorden 'minimum', 'maximum' of 'segment'. Beschrijf prijzen altijd "
         "expliciet als 'laagste prijs' of 'hoogste prijs', eventueel met de tijdsperiode erbij "
         "(bijv. 'de laagste prijs in 30 dagen').\n"
         "Gebruik exact dezelfde prijsnotatie als hieronder gegeven (bijv. €340 of €339,99) — "
         "voeg geen decimalen toe aan hele bedragen.\n"
-        "Geef uitsluitend de 1-2 zinnen terug, zonder titel, kop of opsommingstekens.\n\n"
+        "Geef uitsluitend de zin(nen) terug, zonder titel, kop of opsommingstekens.\n\n"
         f"Product: {product.get('name', '')} ({product.get('brand', '')})\n"
         f"Huidige prijs: €{_fmt_price(ctx['current_price'])} (sinds {ctx['current_price_since']})\n"
         f"Vorige prijs: €{_fmt_price(ctx['previous_price'])} ({_fmt_price_diff(ctx['price_diff'])}, {ctx['drop_pct']:+.1f}%)\n"
-        f"Laagste prijs ooit: €{_fmt_price(ctx['lowest_ever_price'])} (op {ctx['lowest_ever_date']})\n"
+        f"90-daags laagste prijs: €{_fmt_price(ctx['low_90d'])} (op {ctx['low_90d_date']})\n"
         f"30-daags laagste prijs: €{_fmt_price(ctx['low_30d'])} (op {ctx['low_30d_date']})\n"
         f"30-daags hoogste prijs: €{_fmt_price(ctx['high_30d'])} (op {ctx['high_30d_date']})\n\n"
         "Prijsanalyse:"
@@ -117,7 +147,7 @@ def generate_ai_deal_description(product: dict, price_context: dict) -> str | No
         prompt = _build_deal_description_prompt(product, price_context)
         response = _client().messages.create(
             model=_MODEL,
-            max_tokens=120,
+            max_tokens=100,
             temperature=_TEMPERATURE,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -142,13 +172,15 @@ if __name__ == "__main__":
 
     CATEGORIES = ["headphones", "earbuds", "speakers", "soundbars"]
 
-    # candidate product ids covering the 4 deal-description scenarios,
-    # picked manually from a live-DB diagnostic query during T29 planning
+    # candidate product ids covering the deal-description scenarios, picked manually from a
+    # live-DB diagnostic query during T38 (2026-08-14) — prices drift over time, so these will
+    # go stale again; re-run a similar diagnostic query against price_history if needed
     DEAL_SCENARIOS = {
-        "drop to all-time low": 2181,
-        "drop, not lowest": 119,
-        "price increase": 2180,
-        "small fluctuation": 2076,
+        "low_90d (all-time low equivalent)": 2153,
+        "drop, not lowest": 68,
+        "price increase / high_30d": 2039,
+        "small fluctuation": 2058,
+        "low_30d, not low_90d": 9,
     }
 
     def _print_result(text, usage):
@@ -221,7 +253,7 @@ if __name__ == "__main__":
             try:
                 response = _client().messages.create(
                     model=_MODEL,
-                    max_tokens=120,
+                    max_tokens=100,
                     temperature=_TEMPERATURE,
                     messages=[{"role": "user", "content": prompt}],
                 )

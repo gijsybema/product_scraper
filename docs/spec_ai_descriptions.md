@@ -91,33 +91,41 @@ Builds and sends the deal description prompt. Returns 1–2 Dutch sentences, or 
 - `previous_price` — most recent prior measurement before today
 - `price_diff` — absolute change (positive = price dropped, negative = price rose)
 - `drop_pct` — percentage change (positive = price dropped, negative = price rose)
-- `lowest_ever_price` — MIN(price) over all history
-- `lowest_ever_date` — date of that minimum
+- `low_90d` — MIN(price) over last 90 days (bounded to 90 days, not full history — matches the
+  window the site's own price-history graph shows, so the claim is always verifiable by a visitor;
+  see T38 lessons below)
+- `low_90d_date` — date of that 90-day minimum
 - `low_30d` — MIN(price) over last 30 days
 - `low_30d_date` — date of that 30-day minimum
 - `high_30d` — MAX(price) over last 30 days
 - `high_30d_date` — date of that 30-day maximum
 
-**Prompt structure:**
+**Scenario classification (T38):** `_classify_price_situation()` in `src/ai_descriptions.py`
+deterministically picks which single extra fact to surface (`low_90d`, `low_30d`, `high_30d`,
+or `none`) instead of asking the model to judge what's "salient" — see T38 lessons below.
+
+**Prompt structure (as of T38):**
 ```
 Je bent een neutrale prijsanalist voor een Nederlandse prijsvergelijkingssite.
 
-Schrijf 1-2 zinnen die de huidige prijssituatie van dit product samenvatten.
-Noem alleen de meest opvallende feiten. Schrijf feitelijk, geen marketingtaal.
+Schrijf een korte prijsanalyse van twee korte zinnen:
+Zin 1: benoem de huidige prijs en het verschil met de vorige prijs.
+Zin 2: {situation_instruction}
+Houd beide zinnen kort en bondig. Schrijf feitelijk, geen marketingtaal.
 
 Product: {name} ({brand})
 Huidige prijs: €{current_price} (sinds {current_price_since})
 Vorige prijs: €{previous_price} ({price_diff:+.2f}, {drop_pct:+.1f}%)
-Laagste prijs ooit: €{lowest_ever_price} (op {lowest_ever_date})
+90-daags laagste prijs: €{low_90d} (op {low_90d_date})
 30-daags laagste prijs: €{low_30d} (op {low_30d_date})
 30-daags hoogste prijs: €{high_30d} (op {high_30d_date})
 
 Prijsanalyse:
 ```
 
-**Output examples:**
-- "De prijs daalde vandaag met €50 (−17%) naar €249 — de laagste prijs in 30 dagen. De laagste prijs ooit was €219 op 3 maart 2025."
-- "De prijs steeg vandaag licht met €10 naar €289, maar blijft onder het 30-daags maximum van €320. De laagste prijs ooit was €249 op 15 januari 2025."
+**Output examples (real, from T38 preview against live data):**
+- "De Sony WF-C510 Zwart kost momenteel €42,99, een daling van €4 ten opzichte van de vorige prijs van €46,99. Dit is de laagste prijs in de afgelopen 90 dagen."
+- "De Sonos Beam Gen2 Zwart kost momenteel €499, een stijging van €41 ten opzichte van de vorige prijs van €458. Dit is de hoogste prijs in de afgelopen 30 dagen."
 
 ---
 
@@ -125,7 +133,9 @@ Prijsanalyse:
 
 - **Client:** `anthropic.Anthropic()` — reads `ANTHROPIC_API_KEY` from environment
 - **Model:** `claude-haiku-4-5-20251001`
-- **max_tokens:** 200 (product description), 120 (deal description)
+- **max_tokens:** 200 (product description), 100 (deal description, lowered from 120 in T38 — a
+  safety ceiling only, not the shortening mechanism; the length target comes from the prompt's
+  two-sentence structure)
 - **temperature:** 0.3 (low variance for consistent tone)
 - **Failure handling:** catch all exceptions, log the error, return `None` — caller skips the DB write and leaves existing value in place (NULL or stale)
 - **No retries inside the function** — retry happens naturally on next pipeline run
@@ -296,7 +306,7 @@ Implementation follows a two-stage preview gate before any DB writes are introdu
 | ✅ | T35 | One-off backfill `ai_deal_description` for products with a genuine price change already in history: new script `scripts/backfill_ai_deal_descriptions.py` using existing `get_price_context` + `generate_ai_deal_description`; skips products with no real price change (no context to generate from); needed to seed deal descriptions for frontend development ahead of the next natural price-change cycle |
 | ✅ | T36 | `generate_product_description` skips generation (returns `None`, no API call) when `specs` is `None`/empty — avoids hallucinated product copy with no factual grounding; reset the already-affected prod rows (`ai_description` generated from empty `specs`) back to `NULL` so they self-correct once real specs are scraped |
 | ✅ | T37 | Verify in production that `scrape_price_history.py` actually regenerates `ai_deal_description` on a real price change: manually trigger `scrape_price_history.py --limit N` (e.g. 50) from the Railway dashboard; query prod for `ai_deal_description_updated_at` within the run's timeframe; cross-check those product IDs against `price_history` to confirm a genuine price change occurred, not just that the column was touched — see below for the full procedure |
-| ⬜ | T38 | Review and improve prompt wording for both `ai_description` and `ai_deal_description`: sample real production output across all categories; identify recurring quality issues (awkward phrasing, banned-word slippage, overly generic sentences); iterate on prompt copy and/or add few-shot examples; re-run previews and compare before/after |
+| ✅ | T38 | Review and improve prompt wording for both `ai_description` and `ai_deal_description`: sample real production output across all categories; identify recurring quality issues (awkward phrasing, banned-word slippage, overly generic sentences); iterate on prompt copy and/or add few-shot examples; re-run previews and compare before/after |
 | ⬜ | T39 | Evaluate and implement cost-cutting options for AI generation: measure current ongoing spend using `[AI COST]` logs; assess the options listed in Cost Considerations (Batches API, model downgrade for deal descriptions, prompt shortening, skip-on-small-delta, templating); implement the best trade-off(s) and re-measure |
 
 ---
@@ -326,6 +336,56 @@ During T29 preview, the deal description prompt explicitly bans the words "minim
 3. **Structured output** — have the model fill specific slots instead of free text, reducing room to invent phrasing. More engineering, less natural-sounding text.
 4. **Stronger model for deal descriptions only** — Sonnet would likely follow the ban reliably at a higher per-call cost (still cheap at ~50/day volume).
 5. **Periodic spot-check in production** — monitor real output after T31/T32 ship; only invest further if quality issues are frequent.
+
+---
+
+## T38 Lessons: Prompt Wording Iteration
+
+Sampled real production output across all 4 categories via `PROD_READONLY_URL` (read-only,
+~26 `ai_description` + 20 `ai_deal_description` rows) before changing anything.
+
+**Product descriptions:** no changes made. Factual, consistent 60–74 words, matches spec target.
+Only soft observation: near-identical template structure across products (headline feature →
+connectivity/battery → weight/materials), most visible on near-duplicate colour variants of the
+same product. Not a defect against the "feitelijk en bondig" brief — left as-is.
+
+**Deal descriptions — findings and fixes:**
+
+1. **Verbose by default.** Every sampled row used the full 2-sentence structure and packed in
+   current price + previous price + 30-day range + all-time-low regardless of whether that much
+   detail served the story (baseline avg ~39 words/call). Fixed by moving to a fixed 2-sentence
+   template (current price + diff, then exactly one deterministically-chosen extra fact) — avg
+   ~29 words/call in the final version.
+2. **"Pick the most salient fact" was too subjective.** An early revision asked the model to
+   judge what's noteworthy itself; results were inconsistent between otherwise-similar inputs.
+   Replaced with `_classify_price_situation()` in `src/ai_descriptions.py` — a small deterministic
+   Python function that decides which single fact (`low_90d`, `low_30d`, `high_30d`, or none) is
+   true from the data, so the model only phrases a pre-selected fact instead of judging anything.
+3. **Invented timeframe for the previous price.** One live-data test produced "...slechts €1 meer
+   dan **vorige week**" — but no date for the previous measurement is ever given in the prompt
+   (only `current_price_since` has one). The model was guessing a plausible-sounding period. Fixed
+   with an explicit prompt rule forbidding any time-period word (`vorige week`, `gisteren`,
+   `eerder`, etc.) attached to the previous price.
+4. **"Laagste prijs ooit" (lowest ever) was not verifiable by site visitors.** `lowest_ever_price`
+   was `MIN(price)` over the *entire* `price_history` table, unbounded — but the site's own
+   price-history graph only shows 90 days, and prod data already spans 175 days. A visitor could
+   be told "the lowest price ever" for a price point they can't see on the graph. Fixed by bounding
+   the query to 90 days (`get_price_context` in `src/db.py`: field renamed `lowest_ever_price` /
+   `lowest_ever_date` → `low_90d` / `low_90d_date`, same windowing pattern as the existing
+   `low_30d`/`high_30d`) and rewording the prompt from "ooit" to "in de afgelopen 90 dagen"
+   throughout. Considered but rejected: keeping the "ooit" wording while silently bounding the
+   query — still misleading, just less visibly so. Long-term preferred fix (showing more than 90
+   days of history on the site) is a frontend-repo concern, out of scope here — flagged to the
+   user to track there.
+5. **`max_tokens` is a truncation ceiling, not a shortening mechanism.** Lowering it alone
+   (120 → 60) caused one live response to cut off mid-sentence. The actual shortening comes from
+   the prompt's fixed sentence structure; `max_tokens=100` is only a safety backstop.
+
+**Verification:** re-ran the deal-description prompt against 5 real scenarios pulled fresh from
+prod (all-time-low-equivalent/`low_90d`, drop-not-lowest, price-increase/`high_30d`, small
+fluctuation, and a `low_30d`-but-not-`low_90d` case) — all classified correctly, no banned words,
+no invented timeframes, no truncation. Full test suite (138 tests) passes after the `get_price_context`
+rename.
 
 ---
 

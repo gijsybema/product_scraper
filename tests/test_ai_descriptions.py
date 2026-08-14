@@ -8,6 +8,7 @@ import src.ai_descriptions as ai_descriptions
 from src.ai_descriptions import (
     _fmt_price,
     _fmt_price_diff,
+    _classify_price_situation,
     _build_product_description_prompt,
     _build_deal_description_prompt,
     generate_product_description,
@@ -28,8 +29,8 @@ _PRICE_CONTEXT = {
     "previous_price": 390.0,
     "price_diff": -50.0,
     "drop_pct": -12.8,
-    "lowest_ever_price": 320.0,
-    "lowest_ever_date": "2026-03-03",
+    "low_90d": 320.0,
+    "low_90d_date": "2026-03-03",
     "low_30d": 330.0,
     "low_30d_date": "2026-06-15",
     "high_30d": 400.0,
@@ -74,6 +75,27 @@ def test_fmt_price_diff_zero_is_positive_sign():
     assert _fmt_price_diff(0.0) == "+0"
 
 
+# --- _classify_price_situation ---
+
+def test_classify_price_situation_low_90d_takes_priority():
+    # current == low_90d and == low_30d: 90d framing should win (it's the strongest claim).
+    ctx = {"current_price": 300.0, "low_90d": 300.0, "low_30d": 300.0, "high_30d": 350.0}
+    assert _classify_price_situation(ctx) == "low_90d"
+
+def test_classify_price_situation_low_30d_when_not_low_90d():
+    # current matches the 30-day low, but an even lower price exists earlier in the 90-day window.
+    ctx = {"current_price": 340.0, "low_90d": 320.0, "low_30d": 340.0, "high_30d": 340.0}
+    assert _classify_price_situation(ctx) == "low_30d"
+
+def test_classify_price_situation_high_30d():
+    ctx = {"current_price": 400.0, "low_90d": 320.0, "low_30d": 330.0, "high_30d": 400.0}
+    assert _classify_price_situation(ctx) == "high_30d"
+
+def test_classify_price_situation_none_when_mid_range():
+    ctx = {"current_price": 350.0, "low_90d": 320.0, "low_30d": 330.0, "high_30d": 400.0}
+    assert _classify_price_situation(ctx) == "none"
+
+
 # --- prompt construction ---
 
 def test_product_description_prompt_includes_fields():
@@ -99,6 +121,16 @@ def test_deal_description_prompt_includes_formatted_prices():
 def test_deal_description_prompt_bans_forbidden_words():
     prompt = _build_deal_description_prompt(_PRODUCT, _PRICE_CONTEXT)
     assert "nooit de woorden" in prompt
+
+def test_deal_description_prompt_bans_invented_timeframe_for_previous_price():
+    prompt = _build_deal_description_prompt(_PRODUCT, _PRICE_CONTEXT)
+    assert "vorige week" in prompt  # cited as a forbidden example, not asserted as output
+    assert "Noem nooit een tijdsaanduiding" in prompt
+
+def test_deal_description_prompt_uses_classified_situation_instruction():
+    # _PRICE_CONTEXT: current=340, low_90d=320 -> "none" situation (not at any low/high extreme).
+    prompt = _build_deal_description_prompt(_PRODUCT, _PRICE_CONTEXT)
+    assert ai_descriptions._SITUATION_INSTRUCTION["none"] in prompt
 
 
 # --- success path ---

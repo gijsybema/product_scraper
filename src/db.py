@@ -414,10 +414,12 @@ def get_price_context(conn, product_id: int) -> Optional[dict]:
                 (SELECT price FROM price_history
                  WHERE product_id = %s AND scraped_at < cs.current_price_since
                  ORDER BY scraped_at DESC LIMIT 1) AS previous_price,
-                (SELECT MIN(price) FROM price_history WHERE product_id = %s) AS lowest_ever_price,
-                (SELECT MIN(scraped_at) FROM price_history
-                 WHERE product_id = %s
-                   AND price = (SELECT MIN(price) FROM price_history WHERE product_id = %s)) AS lowest_ever_date,
+                (SELECT price FROM price_history
+                 WHERE product_id = %s AND scraped_at >= cs.latest_date - INTERVAL '90 days'
+                 ORDER BY price ASC, scraped_at ASC LIMIT 1) AS low_90d,
+                (SELECT scraped_at FROM price_history
+                 WHERE product_id = %s AND scraped_at >= cs.latest_date - INTERVAL '90 days'
+                 ORDER BY price ASC, scraped_at ASC LIMIT 1) AS low_90d_date,
                 (SELECT price FROM price_history
                  WHERE product_id = %s AND scraped_at >= cs.latest_date - INTERVAL '30 days'
                  ORDER BY price ASC, scraped_at ASC LIMIT 1) AS low_30d,
@@ -432,15 +434,15 @@ def get_price_context(conn, product_id: int) -> Optional[dict]:
                  ORDER BY price DESC, scraped_at ASC LIMIT 1) AS high_30d_date
             FROM current_streak cs
             """,
-            (product_id,) * 9,
+            (product_id,) * 8,
         )
         row = cur.fetchone()
 
     if row is None or row[2] is None:
         return None
 
-    (current_price, current_price_since, previous_price, lowest_ever_price,
-     lowest_ever_date, low_30d, low_30d_date, high_30d, high_30d_date) = row
+    (current_price, current_price_since, previous_price, low_90d,
+     low_90d_date, low_30d, low_30d_date, high_30d, high_30d_date) = row
 
     current_price = float(current_price)
     previous_price = float(previous_price)
@@ -453,8 +455,8 @@ def get_price_context(conn, product_id: int) -> Optional[dict]:
         "previous_price": previous_price,
         "price_diff": price_diff,
         "drop_pct": drop_pct,
-        "lowest_ever_price": float(lowest_ever_price),
-        "lowest_ever_date": lowest_ever_date,
+        "low_90d": float(low_90d),
+        "low_90d_date": low_90d_date,
         "low_30d": float(low_30d),
         "low_30d_date": low_30d_date,
         "high_30d": float(high_30d),

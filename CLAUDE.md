@@ -28,6 +28,9 @@
 - Never modify `docs/spec.md` without explicit user confirmation; always show proposed changes and wait for approval
 - Before implementing a SQL check that depends on a minimum row count (e.g. `COUNT(...) >= N` in a time window), or before finalizing the scope of a one-off backfill/data-fix script: run a diagnostic query against the live DB to verify actual data density / affected-row count first
 
+## Prompt Engineering Rules
+- When a prompt asks the model to judge/select rather than just phrase given facts (e.g. "pick the most salient fact"), move that decision into deterministic Python and only ask the model to phrase the pre-selected result — more consistent than wording the judgment away
+- `max_tokens` is a safety ceiling, not a shortening mechanism — control output length via prompt structure/instructions, and leave headroom in `max_tokens` to avoid mid-sentence truncation
 
 ## Output Style
 - Be concise and structured
