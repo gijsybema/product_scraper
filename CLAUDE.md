@@ -31,6 +31,7 @@
 ## Prompt Engineering Rules
 - When a prompt asks the model to judge/select rather than just phrase given facts (e.g. "pick the most salient fact"), move that decision into deterministic Python and only ask the model to phrase the pre-selected result — more consistent than wording the judgment away
 - `max_tokens` is a safety ceiling, not a shortening mechanism — control output length via prompt structure/instructions, and leave headroom in `max_tokens` to avoid mid-sentence truncation
+- When cutting cost/volume for a generation call, prefer a deterministic template that still produces (and writes) output over skipping the call entirely — skipping risks stale or missing data; substituting a cheap computed equivalent doesn't, and avoids a separate threshold-policy decision
 
 ## Output Style
 - Be concise and structured

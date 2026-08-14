@@ -27,12 +27,17 @@ def get_total_cost() -> float:
     return _total_cost
 
 
+def _print_cost_line(kind: str, name: str, tokens_in: int, tokens_out: int, cost: float, note: str = "") -> None:
+    suffix = f" ({note})" if note else ""
+    print(f"[AI COST] {kind} name=\"{name}\" tokens_in={tokens_in} tokens_out={tokens_out} cost=${cost:.5f}{suffix}")
+
+
 def _log_usage(kind: str, name: str, usage) -> None:
     global _total_cost
     cost = (usage.input_tokens / 1_000_000 * _COST_INPUT_PER_M
             + usage.output_tokens / 1_000_000 * _COST_OUTPUT_PER_M)
     _total_cost += cost
-    print(f"[AI COST] {kind} name=\"{name}\" tokens_in={usage.input_tokens} tokens_out={usage.output_tokens} cost=${cost:.5f}")
+    _print_cost_line(kind, name, usage.input_tokens, usage.output_tokens, cost)
 
 
 def _build_product_description_prompt(product: dict) -> str:
@@ -113,15 +118,32 @@ _SITUATION_INSTRUCTION = {
 }
 
 
+def _contrast_instruction(situation: str, ctx: dict) -> str | None:
+    """Extra sentence for the three 'notable' buckets only (T39) — gives a
+    contrasting reference point so these cases keep some of the richer,
+    more 'special' phrasing worth an API call for, now that 'none' (the
+    mundane majority of triggers) is templated separately at zero cost.
+    """
+    if situation in ("low_90d", "low_30d"):
+        return f"Noem ter vergelijking ook de hoogste prijs in de afgelopen 30 dagen (€{_fmt_price(ctx['high_30d'])})."
+    if situation == "high_30d":
+        return f"Noem ter vergelijking ook de laagste prijs in de afgelopen 90 dagen (€{_fmt_price(ctx['low_90d'])})."
+    return None
+
+
 def _build_deal_description_prompt(product: dict, price_context: dict) -> str:
     ctx = price_context
-    situation_instruction = _SITUATION_INSTRUCTION[_classify_price_situation(ctx)]
+    situation = _classify_price_situation(ctx)
+    situation_instruction = _SITUATION_INSTRUCTION[situation]
+    contrast = _contrast_instruction(situation, ctx)
+    zin3 = f"Zin 3: {contrast}\n" if contrast else ""
     return (
         "Je bent een neutrale prijsanalist voor een Nederlandse prijsvergelijkingssite.\n\n"
-        "Schrijf een korte prijsanalyse van twee korte zinnen:\n"
+        "Schrijf een korte prijsanalyse van twee tot drie korte zinnen:\n"
         "Zin 1: benoem de huidige prijs en het verschil met de vorige prijs.\n"
         f"Zin 2: {situation_instruction}\n"
-        "Houd beide zinnen kort en bondig. Schrijf feitelijk, geen marketingtaal.\n"
+        f"{zin3}"
+        "Houd de zinnen kort en bondig. Schrijf feitelijk, geen marketingtaal.\n"
         "Gebruik alleen de tijdsperiodes en cijfers die hieronder gegeven zijn — verzin geen "
         "andere tijdsperiodes, vergelijkingen of prijssegmenten. Noem nooit een tijdsaanduiding "
         "(zoals 'vorige week', 'gisteren' of 'eerder') bij de vorige prijs — die is hieronder niet gegeven.\n"
@@ -141,13 +163,44 @@ def _build_deal_description_prompt(product: dict, price_context: dict) -> str:
     )
 
 
+def _template_deal_description(product: dict, price_context: dict) -> str:
+    """Deterministic Dutch sentence for the 'none' situation (~53% of daily
+    regeneration triggers per T39 measurement — no notable 90d/30d extreme to
+    phrase). Mirrors the same fact the AI prompt's 'none' instruction already
+    asks for, so output is consistent whichever path produced it.
+    """
+    ctx = price_context
+    name = product.get("name", "")
+    current = ctx["current_price"]
+    diff = ctx["price_diff"]  # positive = price dropped
+    direction = "een daling" if diff > 0 else "een stijging"
+    distance = current - ctx["low_90d"]
+
+    return (
+        f"{name} kost momenteel €{_fmt_price(current)}, {direction} van "
+        f"€{_fmt_price(abs(diff))} ten opzichte van de vorige prijs. De huidige "
+        f"prijs ligt €{_fmt_price(distance)} boven de laagste prijs in de "
+        f"afgelopen 90 dagen (€{_fmt_price(ctx['low_90d'])})."
+    )
+
+
 def generate_ai_deal_description(product: dict, price_context: dict) -> str | None:
-    """Generate 1–2 Dutch sentences summarising the current price situation. Returns None on failure."""
+    """Generate 1–2 Dutch sentences summarising the current price situation.
+
+    For the 'none' situation, returns a deterministic template instead of
+    calling the API (T39 cost-cutting — see _template_deal_description).
+    Returns None on failure.
+    """
     try:
+        if _classify_price_situation(price_context) == "none":
+            text = _template_deal_description(product, price_context)
+            _print_cost_line("deal_description", product.get("name", ""), 0, 0, 0.0,
+                              note="templated, no API call")
+            return text
         prompt = _build_deal_description_prompt(product, price_context)
         response = _client().messages.create(
             model=_MODEL,
-            max_tokens=100,
+            max_tokens=140,
             temperature=_TEMPERATURE,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -247,17 +300,14 @@ if __name__ == "__main__":
                 print(f"Product  : {p['name']} ({p['brand']}) [id={product_id}]")
                 print("[WARN] get_price_context returned None — no distinct previous price]")
                 continue
-            prompt = _build_deal_description_prompt(p, ctx)
-            print(prompt)
-            print(f"{'─'*60}")
+            situation = _classify_price_situation(ctx)
+            print(f"Classified: {situation}" + (" (templated, no API call)" if situation == "none" else ""))
+            if situation != "none":
+                print(_build_deal_description_prompt(p, ctx))
+                print(f"{'─'*60}")
             try:
-                response = _client().messages.create(
-                    model=_MODEL,
-                    max_tokens=100,
-                    temperature=_TEMPERATURE,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                _print_result(response.content[0].text.strip(), response.usage)
+                text = generate_ai_deal_description(p, ctx)
+                print(text if text is not None else "[FAILED -- generate_ai_deal_description returned None]")
             except Exception as e:
                 print(f"[FAILED -- {e}]")
     finally:

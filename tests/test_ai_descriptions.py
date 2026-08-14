@@ -9,6 +9,8 @@ from src.ai_descriptions import (
     _fmt_price,
     _fmt_price_diff,
     _classify_price_situation,
+    _contrast_instruction,
+    _template_deal_description,
     _build_product_description_prompt,
     _build_deal_description_prompt,
     generate_product_description,
@@ -24,6 +26,7 @@ _PRODUCT = {
 }
 
 _PRICE_CONTEXT = {
+    # current=340, low_90d=320 -> classifies as "none" (mid-range, no notable extreme).
     "current_price": 340.0,
     "current_price_since": "2026-07-01",
     "previous_price": 390.0,
@@ -36,6 +39,9 @@ _PRICE_CONTEXT = {
     "high_30d": 400.0,
     "high_30d_date": "2026-06-01",
 }
+
+# current == low_90d -> classifies as "low_90d" (a "notable" bucket, goes through the API).
+_PRICE_CONTEXT_NOTABLE = {**_PRICE_CONTEXT, "current_price": 320.0}
 
 
 def _mock_client(text="Gegenereerde tekst."):
@@ -96,6 +102,45 @@ def test_classify_price_situation_none_when_mid_range():
     assert _classify_price_situation(ctx) == "none"
 
 
+# --- _template_deal_description (T39) ---
+
+def test_template_deal_description_price_dropped():
+    ctx = {"current_price": 158.0, "price_diff": 41.0, "low_90d": 150.0}  # positive diff = dropped
+    text = _template_deal_description({"name": "Pioneer DJ HDJ-X7 Zwart"}, ctx)
+    assert "Pioneer DJ HDJ-X7 Zwart kost momenteel €158" in text
+    assert "een daling van €41" in text
+    assert "€8 boven de laagste prijs in de afgelopen 90 dagen (€150)" in text
+
+def test_template_deal_description_price_rose():
+    ctx = {"current_price": 493.0, "price_diff": -1.0, "low_90d": 479.0}  # negative diff = rose
+    text = _template_deal_description({"name": "Denon Home Soundbar 550"}, ctx)
+    assert "een stijging van €1" in text
+    assert "€14 boven de laagste prijs in de afgelopen 90 dagen (€479)" in text
+
+
+# --- _contrast_instruction (T39) ---
+
+def test_contrast_instruction_low_90d_references_high_30d():
+    ctx = {"high_30d": 48.99}
+    text = _contrast_instruction("low_90d", ctx)
+    assert "€48,99" in text
+    assert "hoogste prijs in de afgelopen 30 dagen" in text
+
+def test_contrast_instruction_low_30d_references_high_30d():
+    ctx = {"high_30d": 675.0}
+    text = _contrast_instruction("low_30d", ctx)
+    assert "€675" in text
+
+def test_contrast_instruction_high_30d_references_low_90d():
+    ctx = {"low_90d": 379.0}
+    text = _contrast_instruction("high_30d", ctx)
+    assert "€379" in text
+    assert "laagste prijs in de afgelopen 90 dagen" in text
+
+def test_contrast_instruction_none_for_mundane_situation():
+    assert _contrast_instruction("none", {}) is None
+
+
 # --- prompt construction ---
 
 def test_product_description_prompt_includes_fields():
@@ -132,6 +177,16 @@ def test_deal_description_prompt_uses_classified_situation_instruction():
     prompt = _build_deal_description_prompt(_PRODUCT, _PRICE_CONTEXT)
     assert ai_descriptions._SITUATION_INSTRUCTION["none"] in prompt
 
+def test_deal_description_prompt_omits_zin3_for_none_situation():
+    prompt = _build_deal_description_prompt(_PRODUCT, _PRICE_CONTEXT)  # "none" bucket
+    assert "Zin 3" not in prompt
+
+def test_deal_description_prompt_includes_zin3_for_notable_situation():
+    # _PRICE_CONTEXT_NOTABLE: current=320=low_90d -> "low_90d" situation.
+    prompt = _build_deal_description_prompt(_PRODUCT, _PRICE_CONTEXT_NOTABLE)
+    assert "Zin 3" in prompt
+    assert "hoogste prijs in de afgelopen 30 dagen" in prompt
+
 
 # --- success path ---
 
@@ -141,8 +196,9 @@ def test_generate_product_description_returns_stripped_text():
     assert result == "Beschrijving tekst."
 
 def test_generate_ai_deal_description_returns_stripped_text():
+    # notable situation (not "none") -> goes through the API, as before this test's fixture change.
     with patch("src.ai_descriptions._client", return_value=_mock_client("  Prijs daalde.  ")):
-        result = generate_ai_deal_description(_PRODUCT, _PRICE_CONTEXT)
+        result = generate_ai_deal_description(_PRODUCT, _PRICE_CONTEXT_NOTABLE)
     assert result == "Prijs daalde."
 
 
@@ -159,8 +215,18 @@ def test_generate_ai_deal_description_returns_none_on_api_error():
     client = MagicMock()
     client.messages.create.side_effect = Exception("API error")
     with patch("src.ai_descriptions._client", return_value=client):
-        result = generate_ai_deal_description(_PRODUCT, _PRICE_CONTEXT)
+        result = generate_ai_deal_description(_PRODUCT, _PRICE_CONTEXT_NOTABLE)
     assert result is None
+
+
+# --- "none" situation uses the template, skips the API entirely (T39) ---
+
+def test_generate_ai_deal_description_none_situation_skips_api_call():
+    client = MagicMock()
+    with patch("src.ai_descriptions._client", return_value=client):
+        result = generate_ai_deal_description(_PRODUCT, _PRICE_CONTEXT)  # "none" bucket
+    client.messages.create.assert_not_called()
+    assert result == _template_deal_description(_PRODUCT, _PRICE_CONTEXT)
 
 
 # --- no API call for invalid input ---

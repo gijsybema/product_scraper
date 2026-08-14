@@ -242,12 +242,34 @@ dashboard — about 2x the naive per-call estimate above. Real prompts ran
 longer than the flat token estimate, mainly because formatted `specs` blocks
 vary a lot in size product to product.
 
-**Ongoing cost is a real line item, not negligible, for a pre-revenue project.**
-Deal descriptions alone could run roughly €20–40/year at sales-event volumes
-(100+ price changes/day), on top of whatever product-description generation
-continues to cost as new products are discovered. For a project with no
-revenue yet, a few euros a month for one feature is worth optimizing, not
-dismissing — revisit this once there's time to focus on it specifically.
+**T39 (2026-08-14) — real volume was much higher than assumed.** Diagnostic
+query against 30 days of live `price_history` found ~115 deal-description
+triggers/day (2–5x the ~20–50/day estimate above) — already running at what
+this section called "sales-event volume," every day. Real baseline cost
+(post-T38 prompt): ~$0.00083/call × ~115/day × 365 ≈ **$34.8/year (~€32)**
+for deal descriptions; product descriptions stay negligible (<$1/year,
+~5–10 new/week).
+
+**T39 decision: templating instead of skipping.** Replicating
+`_classify_price_situation` in SQL against the same 30-day window found the
+`none` bucket (no notable 90d/30d extreme) was 53.5% of all triggers — and
+its AI output was already near-formulaic. Implemented `_template_deal_description`
+(`src/ai_descriptions.py`) to produce that bucket deterministically at $0
+cost instead of calling the API, while the three "notable" buckets
+(`low_90d`/`low_30d`/`high_30d`, 46.5% of triggers) were kept on the API and
+*enriched* with a contrasting-reference third sentence (e.g. "...dit is de
+laagste prijs in 90 dagen. Ter vergelijking: de hoogste prijs in 30 dagen
+was €X.") — regaining some of the richer, pre-T38 phrasing specifically for
+the cases worth paying for. **New measured cost: ~$18.9/year (~€17.5),
+a ~46% reduction**, while the "special" cases read closer to the original
+examples than T38's stricter brevity pass left them.
+
+Skip-on-small-delta was evaluated and rejected in favour of templating:
+templating doesn't leave `ai_deal_description_updated_at` stale, and avoids
+a separate percentage/€ threshold decision. Batches API and a cheaper model
+were both rejected — see rationale below; revisit only if Anthropic ships a
+cheaper current-gen model or the generation architecture moves off the
+synchronous per-product write path.
 
 **Cost visibility:** every `generate_product_description`/`generate_ai_deal_description`
 call now logs `[AI COST] ...` with tokens in/out and USD cost
@@ -255,19 +277,17 @@ call now logs `[AI COST] ...` with tokens in/out and USD cost
 `[AI COST TOTAL]` for the whole run. Use this instead of estimating — actual
 spend is directly observable in each script's own output.
 
-**Cost-cutting options to evaluate later** (not scoped now — revisit as a
-dedicated task):
-- Anthropic's Message Batches API (flat 50% discount, async) for any future
-  large one-off backfill
-- A cheaper/smaller model for deal descriptions specifically (shorter output,
-  more templated structure — may tolerate a lower-tier model better than
-  product descriptions do)
-- Shortening the prompt itself (the banned-word instructions and full price
-  context block add fixed overhead to every call)
-- Skipping regeneration for very small price changes (e.g. <1%) where the
-  deal description wouldn't meaningfully change
-- Templating instead of generating for the most common/predictable cases,
-  falling back to AI generation only for edge cases
+**Remaining options, not pursued:**
+- Message Batches API (50% discount) stays relevant only for a future large
+  one-off backfill (as in T33/T35) — not ongoing generation, which is
+  synchronous per-product by design.
+- Templating the *entire* `ai_deal_description` column (all 4 buckets, not
+  just `none`) remains possible and would drop ongoing deal-description cost
+  to ~$0/year. Not done in T39 because the "notable" buckets' AI phrasing was
+  judged worth the ~$19/year — but if cost ever becomes a concern again, this
+  is the fastest lever: `_SITUATION_INSTRUCTION`'s three notable phrasings are
+  already fixed enough to templatize the same way `_template_deal_description`
+  handles `none` today.
 
 ---
 
@@ -307,7 +327,7 @@ Implementation follows a two-stage preview gate before any DB writes are introdu
 | ✅ | T36 | `generate_product_description` skips generation (returns `None`, no API call) when `specs` is `None`/empty — avoids hallucinated product copy with no factual grounding; reset the already-affected prod rows (`ai_description` generated from empty `specs`) back to `NULL` so they self-correct once real specs are scraped |
 | ✅ | T37 | Verify in production that `scrape_price_history.py` actually regenerates `ai_deal_description` on a real price change: manually trigger `scrape_price_history.py --limit N` (e.g. 50) from the Railway dashboard; query prod for `ai_deal_description_updated_at` within the run's timeframe; cross-check those product IDs against `price_history` to confirm a genuine price change occurred, not just that the column was touched — see below for the full procedure |
 | ✅ | T38 | Review and improve prompt wording for both `ai_description` and `ai_deal_description`: sample real production output across all categories; identify recurring quality issues (awkward phrasing, banned-word slippage, overly generic sentences); iterate on prompt copy and/or add few-shot examples; re-run previews and compare before/after |
-| ⬜ | T39 | Evaluate and implement cost-cutting options for AI generation: measure current ongoing spend using `[AI COST]` logs; assess the options listed in Cost Considerations (Batches API, model downgrade for deal descriptions, prompt shortening, skip-on-small-delta, templating); implement the best trade-off(s) and re-measure |
+| ✅ | T39 | Evaluate and implement cost-cutting options for AI generation: measure current ongoing spend using `[AI COST]` logs; assess the options listed in Cost Considerations (Batches API, model downgrade for deal descriptions, prompt shortening, skip-on-small-delta, templating); implement the best trade-off(s) and re-measure |
 
 ---
 
