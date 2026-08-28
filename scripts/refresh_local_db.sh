@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
 # refresh_local_db.sh
 #
-# Pulls a subset of prod data from Railway into the local dev DB.
+# Pulls prod data from Railway into the local dev DB.
 # Run ad hoc: bash scripts/refresh_local_db.sh
 #
 # Requires in .env.local (repo root):
 #   PROD_READONLY_URL   — Railway read-only connection string
 #   DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD — local DB vars
 #
-# Subset windows:
-#   retailers       — all rows
-#   products        — all rows
-#   price_history   — last 90 days (scraped_at)
-#   price_drops     — last 90 days (new_scraped_at)
-#   scrape_runs     — last 30 days (started_at)
+# Pulls full history — all rows, all tables (no date windows).
 
 set -euo pipefail
 
@@ -114,13 +109,13 @@ stream "products" \
   "SELECT * FROM products ORDER BY id"
 
 stream "price_history" \
-  "SELECT * FROM price_history WHERE scraped_at >= NOW() - INTERVAL '90 days' ORDER BY id"
+  "SELECT * FROM price_history ORDER BY id"
 
 stream "price_drops" \
-  "SELECT * FROM price_drops WHERE new_scraped_at >= NOW() - INTERVAL '90 days' ORDER BY id"
+  "SELECT * FROM price_drops ORDER BY id"
 
 stream "scrape_runs" \
-  "SELECT * FROM scrape_runs WHERE started_at >= NOW() - INTERVAL '30 days' ORDER BY id"
+  "SELECT * FROM scrape_runs ORDER BY id"
 
 echo ""
 echo "Done. Local DB '$DB_NAME' refreshed from prod."

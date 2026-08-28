@@ -2,6 +2,10 @@
 
 Automated price tracking pipeline for audio products on [Coolblue](https://www.coolblue.nl/). Tracks headphones, earbuds, speakers, and soundbars. Discovers products weekly, scrapes prices daily, detects drops, and sends Telegram alerts.
 
+This is the backend/data pipeline for [`price-tracker-web`](https://github.com/gijsybema/price-tracker-web) (TechTracker), which reads from the Postgres database this project populates.
+
+Runs locally only — the daily/weekly scripts were previously scheduled on Railway; that deployment has since been retired in favor of a local-only setup.
+
 ## How it works
 
 ```
@@ -49,7 +53,7 @@ bash scripts/refresh_local_db.sh
 This will:
 1. Apply `sql/schema.sql` + all migrations to the local DB (idempotent)
 2. Truncate all local tables
-3. Stream from prod (read-only): all retailers + products, last 90 days of price_history/price_drops, last 30 days of scrape_runs
+3. Stream from prod (read-only): all rows, all tables (full history)
 
 **Prerequisites:**
 - PostgreSQL client tools installed (`psql` on PATH) — download from [postgresql.org/download/windows](https://www.postgresql.org/download/windows/), install "Command Line Tools" only
@@ -84,21 +88,6 @@ TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
 ```
 
-### Railway (production)
-
-Set `DATABASE_URL` — this takes precedence over all `DB_*` vars. Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as env vars.
-
-### Rotating the production database password
-
-Use Railway's built-in rotation, not a manual `ALTER USER` — Railway's own UI keeps the `postgres` user's password and its `PGPASSWORD`/`DATABASE_URL`/`DATABASE_PUBLIC_URL` variables in sync automatically, restarting the Postgres service to apply it.
-
-1. Railway dashboard → Postgres service → **Database** tab → **Config** sub-tab.
-2. Under **Connection**, click **Regenerate** next to "Regenerate Password". This breaks existing connections until they use the new password, and triggers a Postgres service restart.
-3. Wait for the restart to finish (check **Deployments** → logs for `database system is ready to accept connections`) before relying on the new password.
-4. Update `DATABASE_PUBLIC_URL` in your local `.env.local` to the new value (Postgres service → **Variables** tab).
-5. The app service's `DATABASE_URL` auto-updates if it's set as a Railway variable reference (e.g. `${{Postgres.DATABASE_URL}}`) rather than a pasted-in literal — verify this in the app service's Variables tab.
-6. `PROD_READONLY_URL` (the `scraper_readonly` user) is a separate credential and is **not** rotated by this — only touch it if you're rotating that user specifically.
-
 ## Running scripts
 
 ```bash
@@ -114,35 +103,7 @@ python scripts/scrape_price_history.py --missed-only  # recovery: missed product
 python scripts/send_alerts.py
 ```
 
-Both `discover_products.py` and `scrape_price_history.py` accept `--limit N` to process only the first N products — useful during development to test logic without running the full pipeline. Never pass `--limit` in Railway cron jobs.
-
-### Running a script manually against production
-
-Railway cron jobs run automatically, but occasionally you need to trigger a script once (e.g. to seed a new category).
-
-**Do not use `railway run`** — it injects the internal database hostname (`postgres.railway.internal`), which is unreachable from your local machine.
-
-Instead, connect directly using the public database URL.
-
-**One-time setup** — add this to `.env.local` (find the value in Railway dashboard → Postgres service → Variables tab):
-
-```
-DATABASE_PUBLIC_URL=postgresql://postgres:<password>@<public-host>:<port>/railway
-```
-
-**PowerShell:**
-```powershell
-$env:DATABASE_URL = (Get-Content .env.local | Select-String "^DATABASE_PUBLIC_URL=").ToString().Split("=",2)[1]
-python scripts/discover_products.py --all
-```
-
-**bash:**
-```bash
-export DATABASE_URL=$(grep ^DATABASE_PUBLIC_URL= .env.local | cut -d= -f2-)
-python scripts/discover_products.py --all
-```
-
-The script reads `DATABASE_URL` and connects over the public hostname. No Railway CLI needed.
+Both `discover_products.py` and `scrape_price_history.py` accept `--limit N` to process only the first N products — useful during development to test logic without running the full pipeline.
 
 ## Adding a new category
 
@@ -166,7 +127,7 @@ The script reads `DATABASE_URL` and connects over the public hostname. No Railwa
    python scripts/discover_products.py my-category --limit 5
    ```
 
-6. **Railway cron** — if using `--all` (current setup), no cron change is needed. The new category is picked up automatically.
+6. If using `--all` (current setup), no scheduling change is needed — the new category is picked up automatically on the next run.
 
 ## Scraping safety & legal risk
 
@@ -185,8 +146,6 @@ The scraper uses a browser-like User-Agent and does not check `robots.txt`. Cool
 - Usage is currently personal and non-commercial
 - Scraping is low-volume and polite enough not to constitute a denial-of-service risk
 - Data is not redistributed or sold
-
-**Intended future use:** affiliate marketing (commercial). Before going commercial, the goal is to migrate to Coolblue's official product feed, which would remove the scraping dependency entirely.
 
 ### Future migration path
 
@@ -232,3 +191,9 @@ Seed retailer:
 ```sql
 INSERT INTO retailers (name, base_url) VALUES ('Coolblue', 'https://coolblue.nl');
 ```
+
+## Built with Claude Code
+
+This project was built working with [Claude Code](https://claude.com/claude-code)
+as a pair-programming tool — spec-driven, task by task, with review at each
+step. Commit history reflects that process.
